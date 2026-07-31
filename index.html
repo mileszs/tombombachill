@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tom Bombachill</title>
+
+    <!--
+      Critical styles, inlined so they apply on the very first paint.
+
+      style.css can't do this job on its own: in dev Vite injects the
+      stylesheet from JS, so there is a window where the raw markup is on
+      screen with no CSS at all — long enough to see the wordmark at its
+      natural size before anything hides it. These few rules cover the
+      overlay until the scene is ready.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #1a1410;
+      }
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      #overlay {
+        opacity: 0;
+      }
+      #loader {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        /* Fallback only — ui/loader.js sets this from palette.js fog.color,
+           which stays the single source of truth. */
+        background: #f0c48a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="scene"></div>
+
+      <div id="overlay">
+        <h1 class="wordmark">
+          <img src="/wordmark.png" alt="Tom Bombachill" />
+        </h1>
+        <button id="enter-forest" class="enter-button" type="button">
+          step into the forest
+        </button>
+      </div>
+
+      <!-- Covers the world build. Its colour is set from palette.js at boot so
+           it matches the fog exactly and dissolves straight into the scene. -->
+      <div id="loader" role="status" aria-label="Loading the forest">
+        <span class="loader-sweep"></span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

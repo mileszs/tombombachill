@@ -1,0 +1,196 @@
+:root {
+  --ink: #2b1d10;
+  --parchment: #f6e7cd;
+  --ember: #c9762f;
+
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1410;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* The renderer appends its canvas here. */
+#scene {
+  position: absolute;
+  inset: 0;
+}
+
+#scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Overlay is transparent to the pointer so the scene can take input later;
+   individual interactive elements opt back in. */
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Anchored to the top rather than centred, so the lower third of the frame
+     stays clear for the halfling and the boombox. */
+  justify-content: flex-start;
+  gap: 1.5rem;
+  pointer-events: none;
+  text-align: center;
+  padding: 13vh 2rem 2rem;
+  /* Held back until the scene is on screen — otherwise the title paints with
+     the document and hangs over an empty page for the whole world build. */
+  opacity: 0;
+}
+
+#app.is-ready #overlay {
+  animation: overlay-in 1.6s ease-out both;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.wordmark {
+  margin: 0;
+  line-height: 0;
+}
+
+.wordmark img {
+  display: block;
+  /* Constrained on both axes so a short, wide window doesn't let the wordmark
+     eat the frame and push the button down over the clearing. The browser
+     picks whichever limit binds first and keeps the aspect ratio. */
+  max-width: min(64vw, 940px);
+  max-height: 30vh;
+  width: auto;
+  height: auto;
+  /* Two-tone lettering: a cream fill inside a near-black keyline. Whichever
+     tone loses against a given patch of forest, the other holds — worst case
+     across the scene is 3.9:1, the best of any flat treatment tried. So this
+     shadow is for depth only, not legibility. */
+  filter: drop-shadow(0 4px 9px rgba(20, 12, 4, 0.5));
+}
+
+.enter-button {
+  pointer-events: auto;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: clamp(0.95rem, 1.6vw, 1.2rem);
+  font-style: italic;
+  letter-spacing: 0.06em;
+  color: var(--parchment);
+  padding: 0.75em 1.9em;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 231, 205, 0.45);
+  background: rgba(43, 29, 16, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.enter-button:hover {
+  background: rgba(201, 118, 47, 0.32);
+  border-color: rgba(246, 231, 205, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(20, 12, 4, 0.45);
+}
+
+.enter-button:active {
+  transform: translateY(0);
+}
+
+.enter-button:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 3px;
+}
+
+/* ---- loading screen ---------------------------------------------------- */
+
+#loader {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  /* background-color comes from palette.js fog.color at boot */
+  transition:
+    opacity 600ms ease,
+    visibility 0s linear 600ms;
+}
+
+#app.is-ready #loader {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-sweep {
+  display: block;
+  width: 4.5rem;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(58, 40, 18, 0.18);
+}
+
+.loader-sweep::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: rgba(58, 40, 18, 0.6);
+  animation: loader-sweep 1.15s ease-in-out infinite;
+}
+
+@keyframes loader-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app.is-ready #overlay {
+    animation: none;
+    opacity: 1;
+  }
+  .enter-button {
+    transition: none;
+  }
+  .loader-sweep::after {
+    animation: none;
+    width: 100%;
+  }
+}

@@ -1,0 +1,285 @@
+import {
+  BufferAttribute,
+  Color,
+  CylinderGeometry,
+  Group,
+  IcosahedronGeometry,
+  Mesh,
+  MeshLambertMaterial,
+} from 'three'
+import { FOREST, PROPS, SEED } from '../config.js'
+import { surface } from '../palette.js'
+import { noise2D, terrainHeight } from '../util/terrain.js'
+import { makeRng, pick, randRange } from '../util/rng.js'
+import { collectOccluder } from './occlusion.js'
+
+/**
+ * No canopy may hang lower than this, in metres. Keeps the band at eye level
+ * clear so the player — 1.15 m tall — is never walking through leaves.
+ */
+const CANOPY_CLEARANCE = 2.5
+
+// Deliberately not module-level Colors: a const up here is evaluated once at
+// import and would ignore every later palette edit, so the debug panel's
+// rebuild would appear to do nothing. Same rule everywhere in scene/.
+
+/** The band the raw density field actually occupies — see standDensity. */
+const FIELD_MIN = 0.25
+const FIELD_MAX = 0.68
+
+/**
+ * Low-poly trees: a tapered cylinder trunk under one or two flat-shaded
+ * icospheres. Shape, height and colour are all drawn from the shared seed.
+ */
+
+// A small shared set of materials rather than one per tree — 40 trees, ~8
+// materials — drawn from the bark/leaf swatches in the palette.
+function makeMaterials(colors, vertexColors = false) {
+  return colors.map(
+    (color) => new MeshLambertMaterial({ color, flatShading: true, vertexColors }),
+  )
+}
+
+/**
+ * Nudge each vertex outward by a random amount so no two canopies match, then
+ * bake the vertical light split into vertex colours.
+ *
+ * IcosahedronGeometry is non-indexed, so after computeVertexNormals every
+ * vertex carries its own face's normal — which means a per-vertex colour keyed
+ * on normal.y lands as a clean per-facet shade, matching the flat shading.
+ */
+function makeCanopyGeometry(radius, rng, amount) {
+  const geometry = new IcosahedronGeometry(radius, 1)
+  const position = geometry.attributes.position
+
+  for (let i = 0; i < position.count; i++) {
+    const scale = 1 + randRange(rng, -amount, amount)
+    position.setXYZ(
+      i,
+      position.getX(i) * scale,
+      position.getY(i) * scale,
+      position.getZ(i) * scale,
+    )
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+
+  const normal = geometry.attributes.normal
+  const colors = new Float32Array(position.count * 3)
+  const shade = new Color()
+  const shadeLow = new Color(surface.canopyShade.low)
+  const shadeHigh = new Color(surface.canopyShade.high)
+
+  for (let i = 0; i < normal.count; i++) {
+    // Bias the ramp upward so only the genuinely sky-facing facets take the
+    // warm end, and everything from the equator down falls into the cool fill.
+    const upness = normal.getY(i) * 0.5 + 0.5
+    shade.copy(shadeLow).lerp(shadeHigh, upness ** 0.7)
+    colors[i * 3] = shade.r
+    colors[i * 3 + 1] = shade.g
+    colors[i * 3 + 2] = shade.b
+  }
+
+  geometry.setAttribute('color', new BufferAttribute(colors, 3))
+  return geometry
+}
+
+/** Random rotation and non-uniform scale, so no two canopies read as copies. */
+function varyCanopy(canopy, rng) {
+  canopy.rotation.set(
+    randRange(rng, -0.4, 0.4),
+    rng() * Math.PI * 2,
+    randRange(rng, -0.4, 0.4),
+  )
+  canopy.scale.set(
+    randRange(rng, 0.78, 1.3),
+    randRange(rng, 0.7, 1.35),
+    randRange(rng, 0.78, 1.3),
+  )
+}
+
+function createTree(rng, barkMaterials, leafMaterials, out) {
+  const tree = new Group()
+
+  // Mature forest trees: 12–22 m, so roughly 10–19x the halfling's height.
+  const height = randRange(rng, 12, 22)
+  // A high proportion on purpose: the trunk is what keeps the canopy up out of
+  // the eye-level band. Much past 0.66 and the tallest trees read as bare
+  // poles with their canopies out of frame.
+  const trunkHeight = height * randRange(rng, 0.5, 0.66)
+  // ~0.7–1.4 m across at the base, which is a grown trunk, not a sapling.
+  const bottomRadius = trunkHeight * randRange(rng, 0.035, 0.06)
+  // Reported back so collision has a real radius per tree rather than one
+  // average guess — these range over about 0.2 to 0.7 m.
+  out.radius = bottomRadius
+  const topRadius = bottomRadius * randRange(rng, 0.42, 0.78)
+
+  const trunk = new Mesh(
+    new CylinderGeometry(topRadius, bottomRadius, trunkHeight, 6, 1),
+    pick(rng, barkMaterials).clone(),
+  )
+  trunk.position.y = trunkHeight / 2
+  trunk.castShadow = true
+  trunk.receiveShadow = true
+  tree.add(trunk)
+
+  // Cloned per tree: these materials are what the occlusion fade writes
+  // opacity to, and the palette swatches are shared between trees. Fading a
+  // shared material would ghost every tree using it. Costs nothing in draw
+  // calls — each tree already has its own geometry, so its own draw call.
+  const leafMaterial = pick(rng, leafMaterials).clone()
+  const canopyRadius = (height - trunkHeight) * randRange(rng, 0.34, 0.78)
+
+  const canopy = new Mesh(makeCanopyGeometry(canopyRadius, rng, 0.16), leafMaterial)
+  varyCanopy(canopy, rng)
+
+  let canopyY = trunkHeight + canopyRadius * randRange(rng, 0.4, 0.8)
+  // Lift the whole canopy if it would hang into the eye-level band — cheaper
+  // than rejecting the tree and regenerating it. Bound it by the largest scale
+  // component, not scale.y: varyCanopy also rotates, so the canopy's local Y
+  // isn't vertical and only its bounding sphere is rotation-invariant.
+  const maxScale = Math.max(canopy.scale.x, canopy.scale.y, canopy.scale.z)
+  const lowestPoint = canopyY - canopyRadius * maxScale
+  if (lowestPoint < CANOPY_CLEARANCE) canopyY += CANOPY_CLEARANCE - lowestPoint
+
+  canopy.position.set(randRange(rng, -0.4, 0.4), canopyY, randRange(rng, -0.4, 0.4))
+  canopy.userData.isCanopy = true
+  canopy.castShadow = true
+  canopy.receiveShadow = true
+  tree.add(canopy)
+
+  // Two thirds of the trees get a smaller second clump, offset to one side.
+  if (rng() < 0.65) {
+    const secondRadius = canopyRadius * randRange(rng, 0.4, 0.85)
+    const second = new Mesh(makeCanopyGeometry(secondRadius, rng, 0.2), leafMaterial)
+    varyCanopy(second, rng)
+
+    const angle = rng() * Math.PI * 2
+    const reach = canopyRadius * randRange(rng, 0.3, 0.7)
+    second.position.set(
+      canopy.position.x + Math.cos(angle) * reach,
+      canopy.position.y + canopyRadius * randRange(rng, 0.35, 0.9),
+      canopy.position.z + Math.sin(angle) * reach,
+    )
+    second.userData.isCanopy = true
+    second.castShadow = true
+    second.receiveShadow = true
+    tree.add(second)
+  }
+
+  tree.rotation.y = rng() * Math.PI * 2
+  // A hair of lean, so the trunks don't all read as perfectly plumb.
+  tree.rotation.x = randRange(rng, -0.04, 0.04)
+  tree.rotation.z = randRange(rng, -0.04, 0.04)
+
+  return tree
+}
+
+/**
+ * How likely a tree is to stand at (x, z), in 0–1.
+ *
+ * Two octaves of low-frequency noise, with everything below the threshold
+ * flattened to exactly zero. That flattening is the important part: merely
+ * *thinning* the trees in low-density regions gives you a sparse forest, not
+ * a clearing. Zeroing it means clearings are genuinely, reliably empty and
+ * stay put as `count` changes — which is what makes this usable for level
+ * design.
+ *
+ * Exported because the clearings are where the audio sources will live: this
+ * is the function that says where they are.
+ */
+export function standDensity(x, z) {
+  // The two offsets just pick which layout of stands and clearings you get;
+  // this pair frames a stand in the middle distance with the spawn clearing
+  // open in front of it. Change them for a different map.
+  const broad = noise2D(x, z, FOREST.clusterScale, 375)
+  const detail = noise2D(x, z, FOREST.clusterScale * 0.42, 481)
+  const field = broad * 0.72 + detail * 0.28
+
+  // Summed value noise piles up around its midpoint: measured over the disc
+  // this field spans about 0.25–0.68, not 0–1. Renormalising across the band
+  // it actually occupies is what makes clearingThreshold mean something — on
+  // the raw range, a threshold of 0.45 leaves almost every point near zero and
+  // the trees collapse into a few tiny knots.
+  const normalized = Math.min(1, Math.max(0, (field - FIELD_MIN) / (FIELD_MAX - FIELD_MIN)))
+
+  const above = (normalized - FOREST.clearingThreshold) / (1 - FOREST.clearingThreshold)
+  if (above <= 0) return 0
+  return above ** FOREST.densityContrast
+}
+
+/**
+ * Propose points across the disc and keep them in proportion to the local
+ * density field, so trees gather into stands. Minimum spacing still applies
+ * inside a stand, so they crowd without interpenetrating.
+ */
+function scatterPositions(rng) {
+  const positions = []
+  const minSpacingSq = FOREST.minSpacing ** 2
+  // Generous, because most proposals inside a clearing are rejected outright.
+  const maxAttempts = 60000
+
+  // The guaranteed clearing is centred on the spawn, not the world origin —
+  // otherwise moving the spawn moves the player out of their own clearing.
+  const [spawnX, , spawnZ] = PROPS.playerPosition
+
+  for (let attempt = 0; attempt < maxAttempts && positions.length < FOREST.count; attempt++) {
+    const angle = rng() * Math.PI * 2
+    // sqrt keeps proposals even across the disc; the density field, not the
+    // sampling, is what does the clustering.
+    const radius = Math.sqrt(rng()) * FOREST.scatterRadius
+    const x = Math.cos(angle) * radius
+    const z = Math.sin(angle) * radius
+
+    if ((x - spawnX) ** 2 + (z - spawnZ) ** 2 < FOREST.clearingRadius ** 2) continue
+    if (rng() >= standDensity(x, z)) continue
+
+    let tooClose = false
+    for (const p of positions) {
+      if ((p.x - x) ** 2 + (p.z - z) ** 2 < minSpacingSq) {
+        tooClose = true
+        break
+      }
+    }
+    if (tooClose) continue
+
+    positions.push({ x, z })
+  }
+
+  if (positions.length < FOREST.count) {
+    console.warn(
+      `[forest] placed ${positions.length}/${FOREST.count} trees — the stands ` +
+        'are saturated. Lower FOREST.minSpacing, or lower clearingThreshold / ' +
+        'densityContrast to give the trees more ground to stand on.',
+    )
+  }
+
+  return positions
+}
+
+/**
+ * @returns the forest group plus the trunks as {x, z, radius} — the ground
+ *   clutter needs the positions so it does not sprout through the trees, and
+ *   collision needs the radii.
+ */
+export function createForest() {
+  const rng = makeRng(SEED + 7)
+  const barkMaterials = makeMaterials(surface.bark)
+  const leafMaterials = makeMaterials(surface.leaf)
+
+  const object = new Group()
+  object.name = 'forest'
+
+  const positions = scatterPositions(rng)
+  const occluders = []
+  for (const trunk of positions) {
+    const { x, z } = trunk
+    const tree = createTree(rng, barkMaterials, leafMaterials, trunk)
+    // Sink slightly so the trunk's base never floats over a dip.
+    tree.position.set(x, terrainHeight(x, z) - 0.15, z)
+    object.add(tree)
+    occluders.push(collectOccluder(tree))
+  }
+
+  return { object, positions, occluders }
+}
