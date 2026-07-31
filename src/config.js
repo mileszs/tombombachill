@@ -155,7 +155,7 @@ export const WORLD = {
  */
 export const OCCLUSION = {
   /** What a blocking tree fades to. 0 would read as the tree vanishing. */
-  fadedOpacity: 1.0,
+  fadedOpacity: 0.22,
   /** Metres of clearance kept around the player before a tree counts as blocking. */
   playerClearance: 1.2,
   /** How fast a tree fades in and out, per second. */
