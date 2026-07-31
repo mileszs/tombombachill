@@ -206,6 +206,88 @@ as a whole canvas, so the artwork inside it renders small — one wordmark came 
 
 ---
 
+## Occluder fade
+
+### CLAUDE.md's "occlusion never needs solving" does not hold at a 35° camera
+
+The art direction reasons that a high canopy keeps the camera band clear. The
+geometry disagrees: at a pitch of *p*, a canopy at height *h* covers `h/tan(p)`
+metres of ground **towards the camera** — at 35° that is 1.43·h, so a canopy 15 m
+up blankets 21 m of forest floor. Measured by walking 80 m across the finished
+forest, something is between the camera and the player on about **three quarters
+of steps**. Raising the canopy does not help; only a steeper camera would, and
+the camera pitch is fixed by the diorama look.
+
+### The test is in camera space, not a raycast
+
+The camera is orthographic and never rotates, so "in front of the player" is a
+comparison, not a query: transform a canopy's bounding sphere by the view
+matrix, and it blocks if its depth is less than the player's and it lands within
+a clearance of him on screen. Orthographic means no perspective divide, so
+camera-space X and Y *are* screen offsets in metres — which is why
+`playerClearance` is expressed that way and why it stays correct at any zoom.
+
+A raycast was the obvious alternative and is worse: a ray can slip between the
+two canopy clumps of a single tree and flicker, and it costs more than the ~300
+vector transforms this does per frame.
+
+Note a canopy directly overhead does *not* block — it sits high above the player
+on screen. What covers him is the tree roughly 1.4·h *in front*. Testing "is
+there a tree above me" would have solved nothing.
+
+### Canopy materials are cloned per tree
+
+They were shared across the forest from a five-swatch palette. Fading a shared
+material ghosts every tree using it, so each tree now clones its own. This costs
+nothing in draw calls — every tree already has unique geometry, so it was
+already its own draw call — and adds 334 material objects.
+
+### A faded tree must stop writing depth
+
+`transparent: true` alone is not enough. The player is drawn in the transparent
+pass and, being further away, is drawn *before* the nearer canopy; if that canopy
+still wrote depth it would reject his fragments and he would stay hidden behind
+a tree that looks see-through. So `depthWrite` is switched off for exactly as
+long as a tree is faded, and restored when it is not.
+
+Known: a faded tree still casts a full-strength shadow. The light comes from a
+different direction than the camera, so the shadow is not over the player and it
+reads as the tree still being there. Left alone deliberately.
+
+### Testing this needed a headless harness, not a browser
+
+Software rendering runs this scene at ~1.6 fps, and with the `dt` clamp the
+player covers barely a metre in the time a browser test can run — so an in-scene
+A/B never encounters an occluder and comes back identical with the fade on and
+off. Both the geometry and the integration are covered by importing the real
+modules in Node instead: `scene/trees.js` and `scene/occlusion.js` have no DOM
+dependencies, so the real forest can be built and marched across headlessly.
+Prefer that for anything that needs many simulated frames.
+
+### Canopy clearance is enforced against a nominal radius, and is approximate
+
+`CANOPY_CLEARANCE` (2.5 m) is applied by lifting a canopy until its underside
+clears that height above the tree's own root. The guard bounds the canopy by
+`canopyRadius × (1 + roughen) × maxScale`, which is close but not exact: the
+roughening is asymmetric, so the geometry's real bounding sphere shifts off
+centre and comes out slightly larger, and the tree's lean tilts it a little more.
+
+Measured over 270 canopies, three land about 0.7 m under target — 1.80 m of
+clearance instead of 2.5. Against a 1.15 m player that is still 0.65 m of
+headroom, so the actual requirement (never walk through leaves) holds. Two real
+bugs were fixed on the way here and are worth not reintroducing:
+
+- the guard originally ignored the roughening entirely and under-measured by up
+  to 20%, letting canopies dip to 1.42 m;
+- the *second* canopy clump had no guard at all, though it is placed relative to
+  the first, can be nearly as large, and is scaled again afterwards — it was
+  quite capable of hanging below the canopy it sits beside.
+
+Making it exact means measuring the transformed bounding sphere after the tree
+is positioned and lifting from that. Not worth it while the margin is this
+comfortable.
+---
+
 ## Deployment
 
 ### Workers static assets, not Pages

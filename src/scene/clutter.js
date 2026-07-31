@@ -247,7 +247,7 @@ function samplePosition(rng, clusters, avoid) {
  * @param options.tinted whether to vary lightness per instance
  */
 function buildInstances(geometry, material, rng, clusters, avoid, options) {
-  const { count, scale, tilt = 0.12, tinted = true, castShadow = false } = options
+  const { count, scale, tilt = 0.12, tinted = true, castShadow = false, record } = options
 
   const mesh = new InstancedMesh(geometry, material, count)
   mesh.castShadow = castShadow
@@ -270,6 +270,9 @@ function buildInstances(geometry, material, rng, clusters, avoid, options) {
     dummy.scale.set(s, s * randRange(rng, 0.85, 1.2), s)
     dummy.updateMatrix()
     mesh.setMatrixAt(placed, dummy.matrix)
+    // The instanced mesh keeps only matrices, so anything that needs a
+    // position later has to be told now.
+    if (record) record(spot.x, spot.z, s)
 
     if (tinted) {
       mesh.setColorAt(placed, tintColor.copy(tintLow).lerp(tintHigh, rng()))
@@ -350,6 +353,11 @@ export function createClutter({ avoid = [], anisotropy = 1 } = {}) {
   mushrooms.name = 'clutter:mushrooms'
   group.add(mushrooms)
 
+  // Boulders past a certain size push the player around them. Smaller ones are
+  // pebbles: being stopped by those would read as the ground being sticky.
+  const obstacles = []
+  const BOULDER_GEOMETRY_RADIUS = 0.5
+
   const boulders = buildInstances(
     makeBoulderGeometry(rng),
     new MeshLambertMaterial({ vertexColors: true, flatShading: true }),
@@ -362,10 +370,14 @@ export function createClutter({ avoid = [], anisotropy = 1 } = {}) {
       tilt: 0.25,
       tinted: false,
       castShadow: true,
+      record(x, z, s) {
+        const radius = BOULDER_GEOMETRY_RADIUS * s
+        if (radius >= CLUTTER.boulderBlockRadius) obstacles.push({ x, z, radius })
+      },
     },
   )
   boulders.name = 'clutter:boulders'
   group.add(boulders)
 
-  return group
+  return { object: group, obstacles }
 }

@@ -19,6 +19,15 @@ import { collectOccluder } from './occlusion.js'
  */
 const CANOPY_CLEARANCE = 2.5
 
+/**
+ * How far makeCanopyGeometry pushes vertices outward when roughening. The
+ * clearance guard has to know: bounding a canopy by its nominal radius
+ * under-measures it by exactly this, and five canopies were dipping to 1.4 m
+ * against a guarantee of 2.5.
+ */
+const CANOPY_ROUGHEN = 0.16
+const SECOND_CANOPY_ROUGHEN = 0.2
+
 // Deliberately not module-level Colors: a const up here is evaluated once at
 // import and would ignore every later palette edit, so the debug panel's
 // rebuild would appear to do nothing. Same rule everywhere in scene/.
@@ -130,7 +139,7 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   const leafMaterial = pick(rng, leafMaterials).clone()
   const canopyRadius = (height - trunkHeight) * randRange(rng, 0.34, 0.78)
 
-  const canopy = new Mesh(makeCanopyGeometry(canopyRadius, rng, 0.16), leafMaterial)
+  const canopy = new Mesh(makeCanopyGeometry(canopyRadius, rng, CANOPY_ROUGHEN), leafMaterial)
   varyCanopy(canopy, rng)
 
   let canopyY = trunkHeight + canopyRadius * randRange(rng, 0.4, 0.8)
@@ -139,7 +148,7 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   // component, not scale.y: varyCanopy also rotates, so the canopy's local Y
   // isn't vertical and only its bounding sphere is rotation-invariant.
   const maxScale = Math.max(canopy.scale.x, canopy.scale.y, canopy.scale.z)
-  const lowestPoint = canopyY - canopyRadius * maxScale
+  const lowestPoint = canopyY - canopyRadius * (1 + CANOPY_ROUGHEN) * maxScale
   if (lowestPoint < CANOPY_CLEARANCE) canopyY += CANOPY_CLEARANCE - lowestPoint
 
   canopy.position.set(randRange(rng, -0.4, 0.4), canopyY, randRange(rng, -0.4, 0.4))
@@ -151,14 +160,21 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   // Two thirds of the trees get a smaller second clump, offset to one side.
   if (rng() < 0.65) {
     const secondRadius = canopyRadius * randRange(rng, 0.4, 0.85)
-    const second = new Mesh(makeCanopyGeometry(secondRadius, rng, 0.2), leafMaterial)
+    const second = new Mesh(makeCanopyGeometry(secondRadius, rng, SECOND_CANOPY_ROUGHEN), leafMaterial)
     varyCanopy(second, rng)
 
     const angle = rng() * Math.PI * 2
     const reach = canopyRadius * randRange(rng, 0.3, 0.7)
+    let secondY = canopy.position.y + canopyRadius * randRange(rng, 0.35, 0.9)
+    // The second clump needs the same guard as the first. It is placed relative
+    // to the first canopy, but it can be nearly as large and scaled up again, so
+    // it is quite capable of hanging lower than the canopy it sits beside.
+    const secondScale = Math.max(second.scale.x, second.scale.y, second.scale.z)
+    const secondLowest = secondY - secondRadius * (1 + SECOND_CANOPY_ROUGHEN) * secondScale
+    if (secondLowest < CANOPY_CLEARANCE) secondY += CANOPY_CLEARANCE - secondLowest
     second.position.set(
       canopy.position.x + Math.cos(angle) * reach,
-      canopy.position.y + canopyRadius * randRange(rng, 0.35, 0.9),
+      secondY,
       canopy.position.z + Math.sin(angle) * reach,
     )
     second.userData.isCanopy = true

@@ -5,7 +5,8 @@ import { terrainHeight } from '../util/terrain.js'
 
 /**
  * A boombox sitting on a cut stump — the anchor for the audio engine that
- * comes next, so it's returned as a named group.
+ * comes next, so it's returned as a named group along with the circle the
+ * player should be pushed around.
  */
 
 /**
@@ -119,6 +120,9 @@ export function createBoombox() {
 
   const [x, , z] = PROPS.boomboxPosition
   group.position.set(x, terrainHeight(x, z) - 0.03, z)
+  // Scaling the group rather than the geometry: the stump base sits at the
+  // group origin, so everything grows upward off the ground.
+  group.scale.setScalar(PROPS.boomboxScale)
 
   group.add(createStump(MATERIALS))
 
@@ -128,5 +132,11 @@ export function createBoombox() {
   body.rotation.y = -0.35
   group.add(body)
 
-  return group
+  return {
+    object: group,
+    /** The stump, as the collider sees it. Deliberately tight — this is about
+     *  to become an audio source you walk up to, and a generous radius would
+     *  put a floor under how loud it can ever get. */
+    obstacle: { x, z, radius: 0.38 * PROPS.boomboxScale },
+  }
 }

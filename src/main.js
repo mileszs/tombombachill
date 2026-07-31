@@ -1,6 +1,7 @@
 import './style.css'
 import { createRenderer, resizeRenderer } from './core/renderer.js'
-import { createCameraRig, updateCameraFrustum } from './core/camera.js'
+import { createCameraRig } from './core/camera.js'
+import { CAMERA } from './config.js'
 import { createWorld, disposeWorld } from './scene/index.js'
 import { createOverlay } from './ui/overlay.js'
 import { createInput } from './core/input.js'
@@ -24,9 +25,15 @@ await nextPaint()
 // time, so the render loop reads it through the binding rather than capturing.
 let world = createWorld(renderer)
 
-createOverlay({
-  // TODO: hand off to the controls + audio engine.
-  onEnter: () => {},
+const overlay = createOverlay({
+  onEnter() {
+    // The front door. Drops the title and pushes the camera in from the wide
+    // establishing shot to the walking one — at 30 the boombox is seven pixels
+    // tall, and the game wants to reveal less than the ears do.
+    // TODO: this is also where the AudioContext gets unlocked (Phase 2).
+    overlay.dismiss()
+    rig.setViewSize(CAMERA.walkViewSize)
+  },
 })
 
 createDebugPanel({
@@ -39,7 +46,7 @@ createDebugPanel({
 })
 
 function handleResize() {
-  updateCameraFrustum(camera, resizeRenderer(renderer, container))
+  rig.setAspect(resizeRenderer(renderer, container))
 }
 
 window.addEventListener('resize', handleResize)
