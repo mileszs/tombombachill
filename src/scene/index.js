@@ -32,15 +32,23 @@ export function createWorld(renderer) {
 
   const forest = createForest()
   scene.add(forest.object)
-  const collider = createCollider(forest.positions)
   const occlusion = createOcclusionFade(forest.occluders)
 
   // Clutter needs the trunk positions so it doesn't grow through the trees;
   // collision needs their radii too.
-  scene.add(createClutter({ avoid: forest.positions, anisotropy }))
+  const clutter = createClutter({ avoid: forest.positions, anisotropy })
+  scene.add(clutter.object)
 
   const boombox = createBoombox()
-  scene.add(boombox)
+  scene.add(boombox.object)
+
+  // Everything solid, in one list. All of it is a circle on the ground, which
+  // is why the collider only ever needed to understand circles.
+  const collider = createCollider([
+    ...forest.positions,
+    ...clutter.obstacles,
+    boombox.obstacle,
+  ])
 
   const player = createPlayer({ anisotropy })
   scene.add(player.object)
@@ -49,7 +57,7 @@ export function createWorld(renderer) {
     scene,
     lighting,
     player,
-    boombox,
+    boombox: boombox.object,
     /** Resolves once every asynchronously-loaded asset is in place. */
     ready: player.ready,
 
