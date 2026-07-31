@@ -286,6 +286,25 @@ bugs were fixed on the way here and are worth not reintroducing:
 Making it exact means measuring the transformed bounding sphere after the tree
 is positioned and lifting from that. Not worth it while the margin is this
 comfortable.
+### The player sprite is generated, and its source is tools/player-sprite.html
+
+The sprite is a placeholder standing in for real art. Its source is a single
+self-contained HTML file: open it in a browser, click a tone, save the download
+over `public/sprites/player.png`. No build step and no dependencies, because a
+generator that needs a toolchain is a generator that will not survive a
+nine-month gap.
+
+Skin, its shading and hair move together as a named tone rather than as loose
+constants — hair that reads against a light tone disappears against a deep one.
+`TONES` in that file is the ladder a skin-tone chooser should offer when one
+lands, and the drawing routine already takes a tone, so the game-side work is
+picking one and reloading the texture rather than rewriting the sprite.
+
+Note this colour deliberately does *not* live in `palette.js`. The sprite is a
+baked PNG, so nothing in the running game can tint parts of it — palette.js is
+for values three consumes at runtime, and putting a dead one there would be a
+lie.
+
 ---
 
 ## Deployment

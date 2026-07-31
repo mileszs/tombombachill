@@ -1,0 +1,176 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>player sprite</title>
+<!--
+  Generates public/sprites/player.png.
+
+  Open this file in a browser. No build step, no dependencies, nothing to
+  remember — that is the whole point of it being a single HTML file. Pick a
+  tone, click its download link, and drop the file into public/sprites/.
+
+  The sprite is a placeholder standing in for real art: a small barefoot
+  halfling in a sleeveless tunic and rolled trousers, seen from behind. No
+  facial features are ever drawn, so there is no face to read at any zoom.
+
+  When a skin-tone chooser lands in the game, TONES below is the list it should
+  offer, and the drawing routine already takes a tone rather than constants.
+-->
+<style>
+  body {
+    margin: 0;
+    padding: 2rem;
+    background: #2a2a1e;
+    color: #e6dfc6;
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  h1 { font-size: 1rem; font-weight: 600; margin: 0 0 1.5rem; }
+  .row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+  figure { margin: 0; text-align: center; }
+  /* shown against the forest floor, which is what it has to read against */
+  canvas { background: #4a5a34; border-radius: 4px; width: 96px; height: 192px; }
+  figcaption { margin-top: 0.5rem; font-size: 12px; opacity: 0.75; }
+  a { color: #9dc4ff; }
+  .current { outline: 2px solid #e6dfc6; outline-offset: 4px; }
+</style>
+<h1>player sprite &mdash; pick a tone, download, save as <code>public/sprites/player.png</code></h1>
+<div class="row" id="row"></div>
+
+<script>
+  const W = 192, H = 384
+
+  /**
+   * Skin, its shading, and hair, kept together: hair that reads against a light
+   * tone disappears against a deep one, so they move as a set.
+   * `id` is what a future chooser would persist.
+   */
+  const TONES = [
+    { id: 'light',  skin: '#e8c39a', shade: '#c9a37a', hair: '#8a5730', hairDark: '#63381a' },
+    { id: 'tan',    skin: '#cf9c6b', shade: '#ad7d50', hair: '#6b3f22', hairDark: '#4a2915' },
+    { id: 'warm',   skin: '#a9724a', shade: '#8b5a37', hair: '#4a2c18', hairDark: '#331d0f' },
+    { id: 'deep',   skin: '#845336', shade: '#6a4029', hair: '#3a2213', hairDark: '#26150b' },
+    { id: 'darkest',skin: '#5f3a24', shade: '#4a2c1a', hair: '#2b180d', hairDark: '#1a0e06' },
+  ]
+
+  /** Which one ships. */
+  const CURRENT = 'warm'
+
+  function drawPlayer(ctx, tone) {
+    const INK = '#33261a'
+    const SKIN = tone.skin, SKIN_S = tone.shade
+    const HAIR = tone.hair, HAIR_S = tone.hairDark
+    const TUNIC = '#e6dfc6', TUNIC_S = '#c9c1a4'
+    const TROUS = '#8b6b43', CUFF = '#a98a5e'
+    const x = ctx
+
+    x.clearRect(0, 0, W, H)
+    x.lineJoin = 'round'; x.lineCap = 'round'
+    const draw = (fill, path, lw = 5) => {
+      x.beginPath(); path(); x.closePath()
+      x.fillStyle = fill; x.fill()
+      if (lw) { x.lineWidth = lw; x.strokeStyle = INK; x.stroke() }
+    }
+
+    // ---------- bare feet ----------
+    draw(SKIN, () => x.ellipse(70, 364, 19, 12, -0.10, 0, Math.PI * 2))
+    draw(SKIN, () => x.ellipse(123, 364, 19, 12, 0.10, 0, Math.PI * 2))
+
+    // ---------- bare lower legs ----------
+    for (const lx of [72, 121]) {
+      draw(SKIN, () => {
+        x.moveTo(lx - 12, 296); x.quadraticCurveTo(lx - 13, 330, lx - 11, 356)
+        x.lineTo(lx + 11, 356); x.quadraticCurveTo(lx + 13, 330, lx + 12, 296)
+      })
+    }
+
+    // ---------- trousers, rolled to mid-calf ----------
+    draw(TROUS, () => {
+      x.moveTo(48, 226); x.lineTo(145, 226)
+      x.lineTo(140, 292); x.lineTo(107, 292)
+      x.lineTo(96, 258); x.lineTo(86, 292)
+      x.lineTo(53, 292)
+    })
+    for (const lx of [72, 121]) {
+      draw(CUFF, () => {
+        x.moveTo(lx - 21, 280); x.lineTo(lx + 21, 280)
+        x.lineTo(lx + 19, 302); x.lineTo(lx - 19, 302)
+      }, 4)
+    }
+
+    // ---------- bare arms: one tapered shape per side, hand included ----------
+    const arm = (sx, dir) => draw(SKIN, () => {
+      x.moveTo(sx - dir * 10, 152)
+      x.quadraticCurveTo(sx + dir * 12, 190, sx + dir * 14, 228)
+      x.quadraticCurveTo(sx + dir * 15, 250, sx + dir * 4, 251)
+      x.quadraticCurveTo(sx - dir * 8, 250, sx - dir * 7, 230)
+      x.quadraticCurveTo(sx - dir * 6, 190, sx - dir * 10, 152)
+    })
+    arm(56, -1)
+    arm(137, 1)
+
+    // ---------- sleeveless tunic ----------
+    draw(TUNIC, () => {
+      x.moveTo(62, 146)
+      x.quadraticCurveTo(97, 133, 133, 146)
+      x.quadraticCurveTo(139, 190, 137, 236)
+      x.quadraticCurveTo(97, 246, 58, 236)
+      x.quadraticCurveTo(56, 190, 62, 146)
+    })
+    draw(TUNIC_S, () => {
+      x.moveTo(120, 141); x.quadraticCurveTo(139, 190, 137, 236)
+      x.quadraticCurveTo(126, 241, 116, 242); x.quadraticCurveTo(120, 190, 120, 141)
+    }, 0)
+    x.strokeStyle = TUNIC_S; x.lineWidth = 3.5
+    for (const [ax, dir] of [[66, -1], [129, 1]]) {
+      x.beginPath()
+      x.moveTo(ax + dir * 3, 146)
+      x.quadraticCurveTo(ax - dir * 5, 166, ax + dir * 2, 186)
+      x.stroke()
+    }
+
+    // ---------- neck ----------
+    draw(SKIN_S, () => {
+      x.moveTo(85, 112); x.lineTo(111, 112); x.lineTo(113, 142); x.lineTo(83, 142)
+    }, 0)
+
+    // ---------- head, in three-quarter rear ----------
+    // Everything past the hair is cheek and jaw. No features are ever drawn.
+    draw(SKIN, () => x.ellipse(101, 80, 43, 47, 0, 0, Math.PI * 2))
+    draw(SKIN, () => x.ellipse(140, 86, 8, 11, 0.25, 0, Math.PI * 2), 4)
+
+    const hairline = () => {
+      x.moveTo(58, 92)
+      x.quadraticCurveTo(50, 30, 101, 30)
+      x.quadraticCurveTo(145, 31, 140, 78)
+      x.quadraticCurveTo(133, 68, 126, 82)
+      x.quadraticCurveTo(119, 96, 108, 90)
+      x.quadraticCurveTo(96, 104, 84, 95)
+      x.quadraticCurveTo(70, 106, 58, 92)
+    }
+    draw(HAIR, hairline)
+    // darker curls, clipped inside the mass so they never float free
+    x.save()
+    x.beginPath(); hairline(); x.closePath(); x.clip()
+    x.fillStyle = HAIR_S
+    for (const [cx, cy, r] of [[70, 78, 15], [96, 66, 17], [122, 74, 14], [84, 44, 13], [112, 42, 12]]) {
+      x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill()
+    }
+    x.restore()
+  }
+
+  const row = document.getElementById('row')
+  for (const tone of TONES) {
+    const fig = document.createElement('figure')
+    const canvas = document.createElement('canvas')
+    canvas.width = W; canvas.height = H
+    if (tone.id === CURRENT) canvas.className = 'current'
+    drawPlayer(canvas.getContext('2d'), tone)
+    const cap = document.createElement('figcaption')
+    const link = document.createElement('a')
+    link.textContent = tone.id + (tone.id === CURRENT ? ' (current)' : '')
+    link.download = 'player.png'
+    link.href = canvas.toDataURL('image/png')
+    cap.append(link, document.createElement('br'), document.createTextNode(tone.skin))
+    fig.append(canvas, cap)
+    row.append(fig)
+  }
+</script>
