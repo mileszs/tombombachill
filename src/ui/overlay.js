@@ -11,14 +11,14 @@ export function createOverlay({ onEnter } = {}) {
     onEnter?.()
   })
 
+  const app = document.querySelector('#app')
+
   return {
     element,
     button,
-    hide() {
-      element.hidden = true
-    },
-    show() {
-      element.hidden = false
+    /** Fade the title out. A class rather than `hidden` so it can transition. */
+    dismiss() {
+      app.classList.add('is-walking')
     },
   }
 }

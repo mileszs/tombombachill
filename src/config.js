@@ -32,8 +32,22 @@ export const CAMERA = {
    * along rather than bolted on. Frame-rate corrected in core/camera.js.
    */
   followLerp: 0.08,
-  /** Vertical extent of the frustum, in world units. Horizontal follows aspect. */
+  /**
+   * Vertical extent of the frustum in metres, while the title is up. The wide
+   * establishing shot: the forest is the subject here, and the composition was
+   * art-directed at this width.
+   */
   viewSize: 30,
+  /**
+   * And once you are walking. Tighter, because at 30 the boombox body is seven
+   * pixels tall and cannot show a speaker, let alone a handle. This is also
+   * what CLAUDE.md asks for — the camera should reveal less than the ears do —
+   * and it only became possible once the occluder fade landed, since the
+   * reason we pulled back was a canopy covering the player at this width.
+   */
+  walkViewSize: 18,
+  /** How fast the push-in eases when you step into the forest, per second. */
+  viewSizeEase: 1.1,
   /**
    * Negative near is legal for an orthographic camera and necessary here: at
    * this distance the tops of foreground trees sit *behind* the camera plane,
@@ -96,6 +110,12 @@ export const CLUTTER = {
   strayFraction: 0.18,
   /** Kept clear around the player's spawn so they aren't standing in a bush. */
   spawnClearRadius: 1.1,
+  /**
+   * Boulders at least this radius push the player around them; smaller ones are
+   * pebbles you step over. Set to 0 to make every boulder solid, or above 0.55
+   * to make none of them.
+   */
+  boulderBlockRadius: 0.35,
   counts: {
     ferns: 16000,
     grassTufts: 45000,
@@ -177,4 +197,11 @@ export const PROPS = {
    */
   playerHeight: 1.15,
   boomboxPosition: [0.8, 0, 1.2],
+  /**
+   * A deliberate break in the 1 unit = 1 m rule, and the only one. The boombox
+   * is the forest's single visible sound source and the whole joke; at true
+   * scale it reads as a dark smudge. Nobody measures it against the halfling.
+   * Everything else in the scene stays honest.
+   */
+  boomboxScale: 1.4,
 }

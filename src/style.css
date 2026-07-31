@@ -194,3 +194,11 @@ body {
     width: 100%;
   }
 }
+
+/* Stepping into the forest: the title lets go and the camera pushes in. */
+#app.is-walking #overlay {
+  animation: none;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  pointer-events: none;
+}
