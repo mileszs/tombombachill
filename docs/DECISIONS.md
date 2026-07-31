@@ -203,3 +203,39 @@ on the source:
 **Transparent margin is not free.** An uncropped export is sized by the CSS caps
 as a whole canvas, so the artwork inside it renders small — one wordmark came out
 2.1× smaller on screen than the same art cropped tight. Always crop to the ink.
+
+---
+
+## Deployment
+
+### Workers static assets, not Pages
+
+Cloudflare now routes static sites through Workers with static assets; Pages
+still runs but is not where new projects go. `wrangler.jsonc` has no `main` —
+an assets-only Worker runs no server code, it just serves `dist/`. Static asset
+requests are unmetered on the free plan, so the whole forest costs nothing.
+
+`not_found_handling: "single-page-application"` is set so unknown paths fall
+back to `index.html` rather than 404ing. Costs nothing today, avoids a surprise
+if routes ever appear.
+
+### The two traps that ate an afternoon
+
+**A fresh `*.workers.dev` subdomain has no certificate yet.** The first deploy
+to a brand-new account subdomain returns `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` —
+DNS resolves, but the TLS handshake dies with alert 40 because the edge has no
+cert to present for that SNI. Nothing is wrong with the deploy. It provisions on
+Cloudflare's own schedule. Don't debug it; bind the real domain, whose zone
+already has Universal SSL, and skip `workers.dev` entirely.
+
+**`custom_domain: true` refuses to share an apex.** If any A/AAAA/CNAME already
+exists on the hostname, the trigger fails with a 409 the CLI reports only as
+"a request to the Cloudflare API failed" — the actual message (`code 100117`,
+"already has externally managed DNS records") is buried in the log file, and is
+redacted there too unless you re-run with `WRANGLER_LOG_SANITIZE=false`.
+The orphaned records here were pointing at a dead origin and serving 522s.
+Delete only the A and AAAA. **The MX and SPF TXT records are Namecheap email
+forwarding** — removing those breaks mail to the domain, silently.
+
+Adding `routes` disables `workers.dev` for the Worker automatically. That is the
+desired end state, and it makes the uncertificated subdomain moot.

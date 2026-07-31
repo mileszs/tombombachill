@@ -1,0 +1,27 @@
+{
+  // Static-assets-only Worker. There is no `main` — no server code runs.
+  // Cloudflare just serves whatever `vite build` puts in ./dist.
+  //
+  // Deploy with:  npm run deploy
+  // First time only:  npx wrangler login
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tombombachill",
+  "compatibility_date": "2026-07-30",
+
+  "assets": {
+    "directory": "./dist",
+    // Vite emits a single index.html; any unknown path falls back to it
+    // rather than a 404. Costs nothing, avoids a surprise later.
+    "not_found_handling": "single-page-application"
+  },
+
+  // Cloudflare creates and proxies the DNS record for this itself.
+  // Do not add an A/AAAA/CNAME for the apex by hand — it will conflict.
+  "routes": [
+    { "pattern": "tombombachill.com", "custom_domain": true }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}
