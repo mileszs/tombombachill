@@ -20,8 +20,14 @@ This is a personal art project for a private audience of about a dozen invited
 friends. There are no users to optimize for, no metrics, no monetization. Do not
 suggest analytics, onboarding, engagement features, or growth mechanics.
 
-Full plan: `docs/PLAN.md`. Art references: `docs/reference/`.
-**Look at the reference images before making visual changes.**
+Full plan: `docs/PLAN.md` — **not written yet**. Art references:
+`docs/reference/` — **does not exist**, so there is currently nothing to look at
+before making visual changes; ask for references rather than inventing them.
+
+`docs/DECISIONS.md` *does* exist and is the record of non-obvious choices and,
+more usefully, the traps. Read it before touching rendering, terrain, fog or
+collision — several of them cost an hour each to find and are not recoverable
+from the code.
 
 ## Design principles
 
@@ -31,7 +37,11 @@ this list rather than optimizing for something else.
 1. **Nothing punishes the player.** No damage, no death, no lockouts, no timers.
 2. **The forest is bounded.** Hitting the edge turns you gently around. Fog is
    the boundary — the world's edge must never be visible. This is thematic, not
-   a limitation to work around.
+   a limitation to work around. But fog only hides the *far* direction: towards
+   the camera the view depth is barely 8 m, so the near field stays clear for
+   about 35 m past the player and the world has to be physically large enough to
+   fill it. `WORLD.boundaryRadius` is sized off that, and the ground plane, the
+   forest radius and the clutter radius are sized off it in turn.
 3. **Sources hide.** Exactly one sound source is visibly attached to an object
    (the boombox). Everything else emits from nowhere in particular.
 4. **Every stem is incomplete.** If it sounds finished alone, it's wrong.
@@ -72,8 +82,17 @@ is addressed as "you" and is never named.
 sprites for everything else. No Blender, no asset pipeline — trees are generated
 procedurally in code so the forest is tuned by changing numbers.
 
-**Old-growth forest.** Massive trunks, canopy high overhead. This keeps the
-camera band clear so ground is always legible and occlusion never needs solving.
+**Old-growth forest.** Massive trunks, canopy high overhead, so the band at eye
+level stays clear and the ground is always legible.
+
+This does **not** remove occlusion, which was the original hope here. At a 35°
+pitch a canopy at height *h* covers `h/tan(35°)` = 1.43·h metres of ground
+*towards the camera*, so a canopy 15 m up blankets 21 m of forest floor.
+Measured across the finished forest, something stands between the camera and the
+player on roughly **three quarters of steps**. Raising the canopy cannot fix
+this; only a steeper camera could, and the pitch is fixed by the diorama look.
+Trees that block him fade to 22% and back — `scene/occlusion.js`, tuned by the
+`OCCLUSION` block in `config.js`.
 
 **Golden hour.** Warm amber key light at a low angle against a *cooler* fill.
 The warm/cool split is the entire look — if lit areas and shadowed areas are the
@@ -84,15 +103,24 @@ looks duller.
 
 **All color and light values live in `src/palette.js`** — a pure leaf module with
 zero imports. Roles are named, not colors (`fill`, not `violet`). Never hardcode
-a color anywhere else. The lil-gui panel binds to it; there's an export button
-that emits a paste-ready object literal.
+a color anywhere else. The lil-gui panel (backtick toggles it) binds to it.
+The export button described here **does not exist yet** — values still have to
+be copied out of the panel by hand.
 
-**Camera:** orthographic, fixed, never rotates, rotated off the world axis so
-trunks are seen at an angle rather than dead-on. Isometric diorama, not a map.
-The player should be clearly readable as the subject — if he reads as a small
-detail in a wide landscape, the camera is too far back. Pulling back also breaks
-the audio design: the pull of this game is hearing something you can't see yet,
-so the camera must reveal less than the ears do.
+**Camera:** orthographic, never rotates, rotated off the world axis so trunks are
+seen at an angle rather than dead-on. Isometric diorama, not a map. It follows
+the player by *translating only* — `lookAt` is called once, at construction.
+Pulling back breaks the audio design: the pull of this game is hearing something
+you can't see yet, so the camera must reveal less than the ears do.
+
+**Open tension, recorded rather than settled.** The player currently reads as a
+small figure — about 4% of frame height — which is the "small detail in a wide
+landscape" this section used to warn against. Framing him larger was tried and
+abandoned: at `viewSize` 16 the camera sits *inside* the canopy layer, one 20 m
+tree fills half the frame, and its canopy hides both the player and the boombox.
+You cannot frame a 1.15 m figure and 20 m trees in a single orthographic shot.
+The forest won that argument for now. Revisit it only together with tree height,
+not on its own.
 
 **Tree density is the only level-design tool.** There are no walls, fences, or
 map. Dense stands are connective tissue; clearings are where audio sources live.
@@ -124,9 +152,11 @@ sends rather than sources.
 ## Phase status
 
 - **Phase 0 — The Still.** Done. Static scene, no controls, no audio.
-- **Phase 1 — Walking.** Next. WASD, camera follow, sprite flip, code-driven bob
-  and squash (no animation frames), soft circular collision, bounded edge.
-- **Phase 2 — One sound.** Audio engine, one source, distance gain.
+- **Phase 1 — Walking.** Done. WASD and arrows, camera follow, sprite flip,
+  code-driven bob and squash (no animation frames), soft circular collision,
+  bounded edge. Plus an occluder fade, which turned out to be necessary — see
+  art direction.
+- **Phase 2 — One sound.** Next. Audio engine, one source, distance gain.
 - **Phase 3 — The mixing board.** All stems, `zones.json`, the four-source sweet
   spot that is unmarked and findable only by accident.
 - **Phase 4** — zone character. **Phase 5** — feel + the `sit` state machine
@@ -144,7 +174,10 @@ See `docs/PLAN.md` for full phase detail and the `zones.json` schema.
   gets adjusted while looking at a reference goes in `palette.js`.
 - **Push back when the request doesn't match the code.** Past corrections about
   camera pitch, `yawDeg`, and `shadowRadius` being ignored by the PCF_SOFT branch
-  were all correct and useful. The prompts come from a design conversation that
+  were all correct and useful. So were the later ones: fog bounding only the far
+  direction, the canopy not clearing the camera band, and a soft world boundary
+  needing the *step* rather than the position or it silently stalls the player
+  metres short of the configured radius. The prompts come from a design conversation that
   has no visibility into the codebase — assume they may be wrong about current
   state and say so.
 - Prefer explaining a tradeoff over silently picking one.
