@@ -180,6 +180,32 @@ export const PLAYER = {
 }
 
 /**
+ * Wind.
+ *
+ * Nothing in the forest moved, and with a fixed orthographic camera there is no
+ * parallax either — so motion is the only depth cue left. Two bands: a slow
+ * roll through the canopies, and a faster, much smaller shiver through the
+ * ground cards. Slowness is a material here, so err towards too slow.
+ *
+ * Amplitudes are metres of horizontal displacement. The canopy moves as a rigid
+ * clump (a per-vertex offset would fight the flat shading, which derives its
+ * normals from screen-space derivatives); the cards bend, masked by their own
+ * UV so the base stays planted in the ground.
+ */
+export const WIND = {
+  canopyAmplitude: 0.17,
+  canopySpeed: 0.33,
+  cardAmplitude: 0.035,
+  cardSpeed: 1.15,
+  /**
+   * How fast the wave travels across the forest, in radians per metre. Small
+   * numbers make whole stands move together; large ones make neighbours
+   * disagree and it stops reading as wind.
+   */
+  waveNumber: 0.12,
+}
+
+/**
  * The bounds of the walk.
  *
  * boundaryRadius is not free to choose. The camera shows clear, unfogged ground

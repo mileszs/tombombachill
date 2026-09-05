@@ -9,6 +9,7 @@ import { createCollider } from './collision.js'
 import { createOcclusionFade } from './occlusion.js'
 import { createPlayer } from './player.js'
 import { createBoombox } from './boombox.js'
+import { advanceWind } from './wind.js'
 
 /**
  * Assembles the world. Returns the scene plus handles to the things later
@@ -71,6 +72,7 @@ export function createWorld(renderer) {
      * @param input  from core/input.js
      */
     update(dt, rig, input) {
+      advanceWind(dt)
       player.update(dt, rig.camera, input, collider)
       rig.follow(player.position.x, player.position.z, dt)
       // The shadow box is only ±extent wide, so it has to travel too.

@@ -12,6 +12,7 @@ import { surface } from '../palette.js'
 import { noise2D, terrainHeight } from '../util/terrain.js'
 import { makeRng, pick, randRange } from '../util/rng.js'
 import { collectOccluder } from './occlusion.js'
+import { swayCanopy } from './wind.js'
 
 /**
  * No canopy may hang lower than this, in metres. Keeps the band at eye level
@@ -152,7 +153,11 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   // opacity to, and the palette swatches are shared between trees. Fading a
   // shared material would ghost every tree using it. Costs nothing in draw
   // calls — each tree already has its own geometry, so its own draw call.
-  const leafMaterial = pick(rng, leafMaterials).clone()
+  // swayCanopy has to come after the clone: onBeforeCompile is a prototype
+  // method on Material, so assigning it makes an own property and clone() does
+  // not carry it. Patch the prototype material instead and every tree stands
+  // perfectly still.
+  const leafMaterial = swayCanopy(pick(rng, leafMaterials).clone())
   const canopyRadius = (height - trunkHeight) * randRange(rng, 0.34, 0.78)
 
   const canopy = new Mesh(makeCanopyGeometry(canopyRadius, rng, CANOPY_ROUGHEN), leafMaterial)

@@ -2,7 +2,8 @@ import GUI from 'lil-gui'
 import { light, fog, surface } from '../palette.js'
 import { TONE_MAPPINGS, applyToneMapping } from '../core/renderer.js'
 import { applyLighting } from '../scene/lighting.js'
-import { CAMERA, OCCLUSION } from '../config.js'
+import { CAMERA, OCCLUSION, WIND } from '../config.js'
+import { applyWind } from '../scene/wind.js'
 
 /**
  * Live controls over palette.js. Toggle with the backtick key.
@@ -136,6 +137,15 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   occ.add(OCCLUSION, 'trunkClearance', 0, 3, 0.05).name('trunk clearance (m)')
   occ.add(OCCLUSION, 'fadeSpeed', 0.5, 20, 0.5).name('fade speed')
 
+  // ---- Wind: live, because it is all uniforms ------------------------
+  const wind = gui.addFolder('Wind')
+  const rewind = () => applyWind()
+  wind.add(WIND, 'canopyAmplitude', 0, 0.8, 0.005).name('canopy sway (m)').onChange(rewind)
+  wind.add(WIND, 'canopySpeed', 0, 2, 0.01).name('canopy speed').onChange(rewind)
+  wind.add(WIND, 'cardAmplitude', 0, 0.2, 0.002).name('undergrowth sway (m)').onChange(rewind)
+  wind.add(WIND, 'cardSpeed', 0, 4, 0.01).name('undergrowth speed').onChange(rewind)
+  wind.add(WIND, 'waveNumber', 0, 0.6, 0.005).name('wave / metre').onChange(rewind)
+
   const grass = gui.addFolder('Grass texture — rebuilds')
   bakedColor(grass, surface.grass, 'base')
   bakedSwatches(grass, surface.grass.blades, 'blade')
@@ -173,7 +183,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [occ, grass, trees, clutter, props]) folder.close()
+  for (const folder of [occ, wind, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
     if (!TOGGLE_KEYS.has(event.key)) return
