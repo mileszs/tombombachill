@@ -19,8 +19,26 @@ export const light = {
     intensity: 2.4,
     /** Height above the horizon. Lower = longer shadows. */
     elevationDeg: 33.5,
-    /** Compass bearing the light comes from. */
-    azimuthDeg: 200,
+    /**
+     * Compass bearing the light comes from.
+     *
+     * This is the single most consequential number in the file, because the
+     * camera is fixed at bearing 30° and the *difference* is the whole read.
+     * At the original 200° the two were 170° apart — very nearly dead
+     * backlight — which put N·L = −0.821 on any trunk face pointing at the
+     * camera. Every vertical surface the player ever sees was lit entirely by
+     * the cool fill, so the warm/cool split survived only on the ground and on
+     * canopy tops, and 26 m shadows fell straight towards the lens and stacked
+     * up in the clearest part of the frame.
+     *
+     * At 95° the key rakes across instead: trunks and canopies get a lit side
+     * and a shade side, and the shadows cross the frame. The useful band is
+     * roughly 70–120°; past that it swings back towards frontal and the
+     * modelling flattens again. Note the ground's brightness does not change
+     * with this at all — its normal is up — so this knob can only ever affect
+     * vertical surfaces and where the shadows go.
+     */
+    azimuthDeg: 95,
     /** Only sets the shadow camera's depth range, not the light's falloff. */
     distance: 100,
   },
