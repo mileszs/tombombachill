@@ -107,7 +107,8 @@ export const light = {
  *
  * Linear rather than exponential specifically because it has a near plane.
  * These are distances from the camera, so they only mean anything relative to
- * CAMERA.distance (30). Measured against the current framing:
+ * CAMERA.distance (30). Measured against the *establishing* framing, which is
+ * what they were composed for:
  *
  *   depth  9   bottom of the frame
  *   depth 18   the boombox and the halfling
@@ -115,6 +116,20 @@ export const light = {
  *   depth 51   top of the frame, ~86% hazed
  *   depth 56   `far` — solid fog colour
  *   depth 60+  everything beyond the frame, so no edge is ever visible
+ *
+ * The walking framing is a different frame and these were never retuned for
+ * it. At CAMERA.walkViewSize the frame spans depth 17 to 43, so the bottom
+ * edge sits 5 m clear of `near` and the top reaches only ~62% rather than 86%
+ * — a gentler gradient over a much shallower slice of world. Left as it is
+ * deliberately: it looks right in play, and the two framings wanting different
+ * fog is a real tension, not an oversight. If it ever needs settling, the
+ * honest fix is to scale near/far around CAMERA.distance by
+ * viewSize / CAMERA.viewSize, which reproduces the table above at both widths.
+ *
+ * Worth knowing that the boundary argument no longer binds at the walking
+ * width: the frame only reaches 15.7 m of ground past the focus, so the frame
+ * edge hides the world long before the fog has to. The fog is atmosphere
+ * there, and only the world's edge in the establishing shot.
  *
  * Exponential fog had no such plane — its haze started at the camera, which
  * under an orthographic projection meant a floor of haze over the whole frame

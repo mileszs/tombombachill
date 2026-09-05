@@ -8,6 +8,73 @@ these cost an hour each to find.
 
 ## Traps
 
+### `material.transparent` is a shader define, not a uniform
+
+Flipping `material.transparent` at runtime does **nothing** unless you also set
+`material.needsUpdate = true`.
+
+`opaque` — `transparent === false && blending === NormalBlending &&
+alphaToCoverage === false` — is a *program parameter* in three, part of the
+program cache key, compiled to `#define OPAQUE`, which makes
+`opaque_fragment.glsl` execute `diffuseColor.a = 1.0`. And `needsProgramChange`
+in `WebGLRenderer` checks lights, colour space, batching, instancing, skinning,
+envMap, fog, clipping, vertex alphas, tangents, morphs and tone mapping — but
+never `transparent`. So the material keeps its opaque program, the alpha is
+forced back to 1 in the fragment shader, and the `opacity` uniform (which *is*
+re-uploaded) is thrown away.
+
+This cost the occluder fade its entire existence: the feature shipped inert and
+stayed that way from the initial commit. It presents as nothing at all — the
+forest simply looks like it has no fade — so the only way to tell it apart from
+working correctly is a forced extreme. Set `fadedOpacity: 0` and
+`playerClearance: 200` so every tree is commanded to vanish, render, and diff:
+if the frame does not change, the fade is not running. Broken, that test moved
+3.6% of pixels; fixed, 38.7%.
+
+Guard the `needsUpdate` on the *transition*, not on every frame of the ease —
+recompiling 334 materials per frame stalls the walk.
+
+### `Material.clone()` silently drops `onBeforeCompile`
+
+`onBeforeCompile` is a prototype method on `Material`, so assigning one makes an
+*own* property, and `copy()` only carries the properties it enumerates. Anything
+that clones a patched material gets an unpatched one and no warning.
+
+`trees.js` clones a leaf material per tree (for the occlusion fade), so the wind
+patch has to be applied **after** the clone or two thirds of the forest stands
+still. See `scene/wind.js`.
+
+The flip side is worth knowing: the default `customProgramCacheKey()` returns
+`onBeforeCompile.toString()`, so every material sharing one *function object*
+shares one compiled program. Build the patch in a per-material factory and you
+compile 334 identical shaders instead of one. Both patches in `wind.js` are
+module-level constants for exactly this reason.
+
+### A baked vertex attribute nobody reads costs nothing and shows nothing
+
+`makeCanopyGeometry` computed the warm/cool `canopyShade` ramp, allocated it,
+and uploaded it on all 270 canopies — while `makeMaterials(surface.leaf)` was
+called without its `vertexColors` argument, so every byte was ignored. The
+palette comment described an effect that had never once rendered.
+
+Nothing errors. Nothing warns. **When you bake into a `color` attribute, check
+the material actually asks for it.** Note the inverse is also a trap and is why
+`makeMaterials` takes the flag at all: a Lambert material with
+`vertexColors: true` and no attribute to read gets (0,0,0) and renders black,
+which is why bark must keep it false.
+
+### Lights are not in the scene traverse
+
+`disposeWorld` walked the scene disposing geometries and materials, which never
+reaches a `DirectionalLight` — it has neither. The orphan is a 4096² depth
+target, about 64 MB, per rebuild, and the debug panel fires a rebuild every
+220 ms while you drag a colour picker. `DirectionalLight.dispose()` releases its
+own shadow map, so one call covers it.
+
+`InstancedMesh` is the same shape of problem: `instanceMatrix` and
+`instanceColor` live outside the geometry and only release through the mesh's
+own `dispose()`. Five clutter meshes, 80,000 instances, ~6 MB a rebuild.
+
 ### Value noise never approaches its theoretical amplitude
 
 Two octaves summed to a nominal ±1.22 actually sit inside about **±0.6**, with
@@ -254,6 +321,52 @@ Known: a faded tree still casts a full-strength shadow. The light comes from a
 different direction than the camera, so the shadow is not over the player and it
 reads as the tree still being there. Left alone deliberately.
 
+### It never ran, and so none of its numbers had ever been seen
+
+The whole feature was inert until 2026-09 — see "material.transparent is a
+shader define" above. Everything below it in this section was reasoned out
+correctly and then never validated against a pixel, so treat the numbers with
+suspicion and the reasoning with less.
+
+Two things that reasoning got wrong, found the moment it first rendered:
+
+- **0.22 was far too transparent.** A faded canopy over the bright fog stopped
+  reading as a tree and came apart into a scatter of translucent facet edges —
+  worse once the canopy vertex ramp and the raking key gave those facets real
+  contrast. 0.45 holds together as a dome you can see through, and the player
+  still reads clearly against it.
+- **`playerClearance: 1.2` ghosted trees nowhere near him.** The canopy test is
+  a *bounding sphere*, and a rotated, non-uniformly scaled icosphere is bounded
+  by its largest scale component — so the test circle is already up to half
+  again the width of the visible leaves. Adding 1.2 m on top faded a stand at a
+  time. 0.3 is the current value.
+
+`depthWrite` was suspected too, and is not the problem: forcing it true while
+faded changes mean luminance by 0.04 of 255. The existing reasoning for turning
+it off still holds, and it stays off.
+
+The fade now has its own folder in the debug panel, because these are the
+least-tuned numbers in the project.
+
+### The trunk needed a different shape, not more spheres
+
+Canopy spheres miss the trunk case entirely. For a tree close to the camera the
+canopy has already climbed off the top of the player on screen while the trunk,
+which starts at the ground, has not. Measured over 18,826 simulated steps: a
+trunk overlaps the player on **15.2%** of steps, and on **6.0%** no canopy
+sphere is near enough to trigger anything.
+
+Tiling a 17 m trunk with spheres at its own radius would take about twenty of
+them, so the trunk is tested as a **capsule** instead: transform its two ends,
+find the closest point on the screen-space segment to the player, and compare
+depth *at that point* so a trunk standing behind him never fades. Two transforms
+instead of twenty, and exact along the whole length.
+
+`trunkClearance` is deliberately tighter than `playerClearance`. A canopy is a
+soft mass and fading it early costs nothing; a trunk is a hard narrow blocker at
+eye level, and a generous clearance ghosts half the stand every time you walk
+past one.
+
 ### Testing this needed a headless harness, not a browser
 
 Software rendering runs this scene at ~1.6 fps, and with the `dt` clamp the
@@ -304,6 +417,117 @@ Note this colour deliberately does *not* live in `palette.js`. The sprite is a
 baked PNG, so nothing in the running game can tint parts of it — palette.js is
 for values three consumes at runtime, and putting a dead one there would be a
 lie.
+
+
+---
+
+## Light, ground and wind
+
+### The key's azimuth is only meaningful *relative to the camera's bearing*
+
+The camera sits at bearing 30°. The key was at 200°. That is 170° apart — very
+nearly dead backlight — and the consequence is not subtle: on a trunk face
+pointing straight at the camera, **N·L = −0.821**. Every vertical surface the
+player ever looks at received zero key light and was lit entirely by the cool
+fill, so the warm/cool split that the art direction calls "the entire look"
+survived only on the ground and on canopy tops. Shadows fell toward bearing 20°,
+almost straight at the lens, so a 17 m tree laid a 26 m shadow down the screen
+into the clearest part of the frame, where they stacked into noise.
+
+At 95° the key rakes across instead. Mean frame luminance rose 37.2 → 46.5 with
+no change to exposure, purely from surfaces that were previously unlit.
+
+**The ground's brightness does not change with azimuth at all** — its normal is
+up, so only elevation matters to it. That makes this a safe knob: it can affect
+nothing but vertical surfaces and where the shadows go.
+
+### Contact shading is baked into the ground's vertex colours, not drawn
+
+Two darkenings — a cool shift under dense stands, driven by the already-exported
+`standDensity()`, and a contact ring where each trunk meets the ground — are
+both lerped into the same vertex tints the ground already multiplies over its
+neutral grass map. No new draw call, no runtime cost, no transparency ordering,
+and nothing to z-fight with the terrain it sits on.
+
+This is why **the forest is built before the ground** in `scene/index.js`: the
+ground needs the trunk positions and radii. It is also why `GROUND.segments`
+went from 160 to 288 — a 1 m grid cannot draw a 1.4 m ring without going blocky.
+Trunks are bucketed into a 4 m grid first, or it is 167 trunks × 83,000 vertices
+at build time.
+
+**Do not reach for `aoMap` here.** `aomap_fragment` applies occlusion as
+`reflectedLight.indirectDiffuse *= ambientOcclusion` — it darkens only the
+*indirect* term, which in this rig is the hemisphere and ambient, i.e. the
+entire cool half of the palette. An aoMap would make enclosed ground *warmer and
+flatter*, which is exactly backwards for this art direction. It would also need
+a `uv1` set and a baked texture, which means an asset pipeline.
+
+### Wind is two shader patches and one clock
+
+`scene/wind.js`. Everything is in the vertex shader through `onBeforeCompile`,
+so 80,000 clutter instances and 270 canopies move for no draw calls and no CPU.
+Phase comes from `instanceMatrix[3].xz` for instanced cards and `modelMatrix[3]`
+for canopies — both free, neither needs a new attribute.
+
+Canopies translate **rigidly**. That is not laziness: `flatShading` derives its
+normals in the fragment shader from the screen-space derivatives of the view
+position, so a per-vertex displacement would rewrite the shading of every facet
+as the tree moved. Cards do bend, masked by `uv.y` — 0 at the base, 1 at the tip
+in `makeCardGeometry` — so the plant stays rooted whatever its instance scale.
+
+Known and accepted: **the shadow pass never sees any of it.** `getDepthMaterial`
+returns three's own internal depth material and copies across only
+`map`/`alphaMap`/`alphaTest`/`side`, so a swaying canopy casts a still shadow.
+The clutter does not cast at all, and a 0.17 m crown movement against a 20 m
+shadow at a six-texel penumbra does not read. If it ever does, the fix is a
+`customDepthMaterial` per canopy carrying the same patch, at the price of 270
+more materials.
+
+### Shadow texel snapping fixes the swimming but not all of the fizz
+
+`followLighting` now quantises the shadow box to whole shadow-map texels before
+moving it, so a stationary tree lands on the same texels frame after frame.
+`LightShadow.updateMatrices` sits the shadow camera at the light and `lookAt`s
+the target with the default up vector, so with a fixed elevation and azimuth the
+basis is constant and can be precomputed: `right = cross(up, towardsSun)`,
+`up' = cross(towardsSun, right)`.
+
+What it does **not** fix: r185's `SHADOWMAP_TYPE_PCF` branch rotates its five-tap
+Vogel disk by `interleavedGradientNoise(gl_FragCoord.xy)` — *screen* space. The
+camera lerps by a sub-pixel amount every frame, so a fixed world point still
+slides across that noise field and its five-tap estimate keeps changing. The
+residue is a fine edge shimmer rather than the whole shadow drifting. The tap
+count is not exposed; the remaining lever is a smaller `shadow.extent`, which
+buys resolution and lets `shadow.radius` come down.
+
+### Canvas cards need their colour bled into the transparent margin
+
+A canvas starts as RGBA (0,0,0,0) and stays that way wherever nothing is drawn.
+three uploads it unpremultiplied and mipmaps it with a plain `generateMipmap`,
+which averages that **black** into the RGB of every texel along an edge. These
+cards are ten to twenty pixels tall on screen, so they draw from a deep mip
+almost always, and the surviving fringe reads as every leaf being dirty rather
+than soft.
+
+`bleedEdges` in `util/textures.js` runs two passes of a four-neighbour dilate
+before the `CanvasTexture` is built. **Alpha is never touched**, so `alphaTest`
+behaviour is unchanged and nothing invisible becomes visible. Note a filled
+texel is still fully transparent, so alpha alone cannot tell it from an unfilled
+one on the second pass — the RGB has to be checked too.
+
+### The contact shadow is a flat quad and the ground is not flat
+
+`terrainHeight`'s maximum gradient over the walkable disc is 0.164/m, which is a
+5.9 cm rise across the blob's own 0.36 m radius — twice the 3 cm it used to be
+lifted by. On about **16%** of the walkable area the uphill arc was clipped by
+the ground, and the bite travelled as you walked. It now sits on the highest of
+four rim probes, so on the downhill side it floats instead, which is much the
+lesser evil.
+
+Separately: the material had a hardcoded `color: 0x000000` multiplying over a
+texture already painted in `surface.blobShadow.color`, so the blob could only
+ever be pure black and the panel's swatch — which pays a full world rebuild —
+changed nothing. It was the only hardcoded hex outside `palette.js` in `src/`.
 
 ---
 
