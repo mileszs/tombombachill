@@ -122,6 +122,10 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedColor(ground, surface.ground, 'soil')
   bakedNum(ground, surface.ground, 'blendJitter', 0, 1, 0.01)
   bakedNum(ground, surface.ground, 'tileSize', 2, 30, 0.5)
+  bakedColor(ground, surface.ground, 'standShade').name('under a stand')
+  bakedNum(ground, surface.ground, 'standShadeStrength', 0, 1, 0.01).name('stand shade amount')
+  bakedColor(ground, surface.ground, 'rootShade').name('trunk contact')
+  bakedNum(ground, surface.ground, 'rootShadeStrength', 0, 1, 0.01).name('contact amount')
 
   // ---- Occlusion: live, read fresh every frame -----------------------
   // Worth having a panel for: none of these had ever been seen until the fade

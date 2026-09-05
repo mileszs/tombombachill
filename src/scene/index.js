@@ -28,11 +28,15 @@ export function createWorld(renderer) {
   // Centre the shadow camera on what the view camera is framing, not on the
   // world origin.
   const lighting = createLighting(scene, CAMERA.target)
-  scene.add(createGround({ anisotropy }))
 
+  // The forest is built before the ground, not after: the ground bakes the
+  // contact shading under each trunk straight into its vertex colours, so it
+  // needs the trunk positions and radii first.
   const forest = createForest()
   scene.add(forest.object)
   const occlusion = createOcclusionFade(forest.occluders)
+
+  scene.add(createGround({ anisotropy, trunks: forest.positions }))
 
   // Clutter needs the trunk positions so it doesn't grow through the trees;
   // collision needs their radii too.

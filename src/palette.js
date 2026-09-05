@@ -145,6 +145,28 @@ export const surface = {
     blendJitter: 0.22,
     /** World units covered by one repeat of the grass texture. */
     tileSize: 6,
+
+    /**
+     * Two darkenings baked into the same vertex tints, which is why they are
+     * colours rather than an occlusion map: an aoMap would have been the
+     * obvious tool and is the wrong one, because it multiplies only the
+     * *indirect* term — which in this rig is the entire cool half of the
+     * palette — so it would make enclosed ground warmer and flatter, exactly
+     * backwards.
+     *
+     * `standShade` is where the floor goes under a dense stand, driven by
+     * standDensity(). It costs nothing at runtime and it says something true:
+     * clearings read bright, stands read closed-in, and the clearings are where
+     * the audio sources live.
+     *
+     * `rootShade` is the contact darkening where a trunk meets the ground. The
+     * key light throws a shadow in one direction only; this is what stops a
+     * trunk reading as a pole standing on a lawn on the lit side.
+     */
+    standShade: 0x3f4a58,
+    standShadeStrength: 0.4,
+    rootShade: 0x35372c,
+    rootShadeStrength: 0.6,
   },
 
   /** Painted onto a canvas, so: CSS colour strings. Near-neutral by design. */

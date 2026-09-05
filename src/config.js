@@ -9,6 +9,26 @@ export const SEED = 20260728
 /** Ground plane is WORLD_SIZE x WORLD_SIZE, centred on the origin. */
 export const WORLD_SIZE = 160
 
+export const GROUND = {
+  /**
+   * Grid resolution of the displaced plane. This is not only a terrain-shape
+   * number any more: the trunk contact shading is baked into the same vertex
+   * colours, so the grid also has to be fine enough to draw a ~1.4 m ring
+   * without it going blocky. At 288 over 160 m a vertex is every 0.56 m, which
+   * puts about five of them across the ring.
+   *
+   * It is one mesh either way, so the cost is build time and memory, not draw
+   * calls.
+   */
+  segments: 288,
+  /**
+   * How far the contact darkening reaches from the centre of a trunk. Scaled
+   * by each trunk's own radius, so the big trees sit heavier than the small
+   * ones.
+   */
+  rootShadeRadius: 2.1,
+}
+
 export const CAMERA = {
   /**
    * Down-angle from the horizon. True isometric is 35.26°; at this angle the
