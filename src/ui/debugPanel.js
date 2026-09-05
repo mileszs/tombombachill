@@ -2,7 +2,7 @@ import GUI from 'lil-gui'
 import { light, fog, surface } from '../palette.js'
 import { TONE_MAPPINGS, applyToneMapping } from '../core/renderer.js'
 import { applyLighting } from '../scene/lighting.js'
-import { CAMERA } from '../config.js'
+import { CAMERA, OCCLUSION } from '../config.js'
 
 /**
  * Live controls over palette.js. Toggle with the backtick key.
@@ -117,6 +117,15 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(ground, surface.ground, 'blendJitter', 0, 1, 0.01)
   bakedNum(ground, surface.ground, 'tileSize', 2, 30, 0.5)
 
+  // ---- Occlusion: live, read fresh every frame -----------------------
+  // Worth having a panel for: none of these had ever been seen until the fade
+  // was fixed, so they are the least-tuned numbers in the project.
+  const occ = gui.addFolder('Occluder fade')
+  occ.add(OCCLUSION, 'fadedOpacity', 0, 1, 0.01).name('faded to')
+  occ.add(OCCLUSION, 'playerClearance', 0, 3, 0.05).name('canopy clearance (m)')
+  occ.add(OCCLUSION, 'trunkClearance', 0, 3, 0.05).name('trunk clearance (m)')
+  occ.add(OCCLUSION, 'fadeSpeed', 0.5, 20, 0.5).name('fade speed')
+
   const grass = gui.addFolder('Grass texture — rebuilds')
   bakedColor(grass, surface.grass, 'base')
   bakedSwatches(grass, surface.grass.blades, 'blade')
@@ -154,7 +163,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [grass, trees, clutter, props]) folder.close()
+  for (const folder of [occ, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
     if (event.key !== TOGGLE_KEY) return

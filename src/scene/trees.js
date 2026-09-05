@@ -130,6 +130,12 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   trunk.position.y = trunkHeight / 2
   trunk.castShadow = true
   trunk.receiveShadow = true
+  // The occluder fade tests the trunk as a capsule, and a cylinder's ends are
+  // at ±height/2 in its own space — so it needs the height as well as the
+  // radius to rebuild that segment in world space after the tree's lean.
+  trunk.userData.isTrunk = true
+  trunk.userData.trunkHeight = trunkHeight
+  trunk.userData.trunkRadius = bottomRadius
   tree.add(trunk)
 
   // Cloned per tree: these materials are what the occlusion fade writes

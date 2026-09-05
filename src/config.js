@@ -174,10 +174,35 @@ export const WORLD = {
  * blankets 21 m of it and the player walks under something often.
  */
 export const OCCLUSION = {
-  /** What a blocking tree fades to. 0 would read as the tree vanishing. */
-  fadedOpacity: 0.22,
-  /** Metres of clearance kept around the player before a tree counts as blocking. */
-  playerClearance: 1.2,
+  /**
+   * What a blocking tree fades to.
+   *
+   * Every number in this block was chosen before the fade had ever actually
+   * rendered — it was inert from the initial commit until 2026-09 — so treat
+   * them as a first look rather than as settled. At the original 0.22 a faded
+   * canopy over the bright fog stopped reading as a tree at all and came apart
+   * into a mess of translucent facet edges, which got worse once the canopy
+   * vertex ramp and the raking key gave those facets real contrast. 0.45 holds
+   * together as a dome you can see through, and the player still reads clearly
+   * against it.
+   */
+  fadedOpacity: 0.45,
+  /**
+   * Metres of clearance kept around the player before a canopy counts as
+   * blocking. Small, because the canopy is tested as a *bounding sphere* and
+   * that is already generous: a rotated, non-uniformly scaled icosphere is
+   * bounded by its largest scale component, so the test circle can be half
+   * again the width of the leaves you can actually see. Adding much on top of
+   * that ghosts trees that are nowhere near him.
+   */
+  playerClearance: 0.3,
+  /**
+   * The same, for trunks — deliberately tighter. A canopy is a soft mass and
+   * fading it early costs nothing; a trunk is a hard narrow blocker standing at
+   * eye level, and a generous clearance here would ghost half the stand every
+   * time you walked past one.
+   */
+  trunkClearance: 0.5,
   /** How fast a tree fades in and out, per second. */
   fadeSpeed: 6,
   /** Trees further than this from the player are never tested. */
