@@ -28,6 +28,14 @@ const SPRITE_URL = '/sprites/player.png'
 /** Fallback aspect used until the image loads and reports its real one. */
 const ASSUMED_ASPECT = 0.5
 
+/** Rim samples used to find the highest ground under the contact shadow. */
+const BLOB_PROBES = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+]
+
 export function createPlayer({ anisotropy = 1 } = {}) {
   const group = new Group()
   group.name = 'player'
@@ -61,21 +69,32 @@ export function createPlayer({ anisotropy = 1 } = {}) {
 
   const blob = new Mesh(
     new PlaneGeometry(1, 1),
+    // No `color` here. The texture is already painted in
+    // surface.blobShadow.color, and a material colour multiplies over it — so
+    // the 0x000000 that used to sit here forced the blob to pure black
+    // whatever the palette said, and the panel's swatch (which pays a full
+    // world rebuild) changed nothing at all.
     new MeshBasicMaterial({
       map: makeBlobShadowTexture(),
       transparent: true,
       depthWrite: false,
-      color: 0x000000,
     }),
   )
   blob.rotation.x = -Math.PI / 2
-  blob.position.y = 0.03
+  blob.position.y = PLAYER.blobLift
   blob.renderOrder = 1
+  // Sized off the assumed aspect until the texture lands and fitToTexture
+  // corrects it — the blob is visible from the first frame even though the
+  // sprite above it is not.
+  blob.scale.setScalar(height * ASSUMED_ASPECT * 1.25)
   group.add(blob)
 
   // Kept so the per-frame bob, squash and flip can be rebuilt from a known
   // base rather than accumulating on top of last frame’s scale.
   let baseWidth = height * ASSUMED_ASPECT
+
+  /** Radius the blob's gradient actually reaches, kept for the ground probe. */
+  let blobRadius = height * ASSUMED_ASPECT * 1.25 * 0.5
 
   const fitToTexture = (image) => {
     // Height is authoritative; width follows the image so the sprite is never
@@ -83,6 +102,7 @@ export function createPlayer({ anisotropy = 1 } = {}) {
     baseWidth = height * (image.width / image.height)
     sprite.scale.set(baseWidth, height, 1)
     blob.scale.setScalar(baseWidth * 1.25)
+    blobRadius = baseWidth * 1.25 * 0.5
   }
 
   // Resolves either way — the caller waits on this before showing the scene,
@@ -113,7 +133,6 @@ export function createPlayer({ anisotropy = 1 } = {}) {
     )
   })
 
-  blob.scale.setScalar(height * ASSUMED_ASPECT * 1.25)
 
   // --- walk state -------------------------------------------------------
   const position = { x, z }
@@ -176,8 +195,23 @@ export function createPlayer({ anisotropy = 1 } = {}) {
       gait += (target - gait) * Math.min(1, PLAYER.bobEase * dt)
 
       const bob = Math.sin(bobPhase) * gait
-      group.position.set(position.x, terrainHeight(position.x, position.z), position.z)
+      const footing = terrainHeight(position.x, position.z)
+      group.position.set(position.x, footing, position.z)
       sprite.position.y = bob * PLAYER.bobHeight
+
+      // The blob is a flat quad and the ground is not flat. Over its own radius
+      // the terrain climbs up to 5.9 cm at the steepest slope it reaches, which
+      // is twice the clearance it used to be given — so on about a sixth of the
+      // walkable area the uphill arc was being clipped by the ground, and the
+      // bite travelled as you walked. Sit it on the highest ground it covers
+      // instead. Four probes, because the blob is small and the terrain is
+      // gentle enough that its extremes are always at the rim.
+      let highest = footing
+      for (const [ox, oz] of BLOB_PROBES) {
+        const h = terrainHeight(position.x + ox * blobRadius, position.z + oz * blobRadius)
+        if (h > highest) highest = h
+      }
+      blob.position.y = highest - footing + PLAYER.blobLift
 
       // Squash and stretch off the same sine: tall at the top of the bob,
       // wide and low in the dip. Roughly volume-preserving, which is what

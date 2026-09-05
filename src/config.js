@@ -145,6 +145,18 @@ export const PLAYER = {
   bobSquash: 0.07,
   /** How fast the bob winds up and down when starting and stopping, per second. */
   bobEase: 8,
+
+  /**
+   * How far the contact shadow floats above the ground.
+   *
+   * It is a flat quad and the ground is not flat: over the blob's own radius a
+   * 9.3° slope — the steepest the terrain reaches — climbs 5.9 cm, so a 3 cm
+   * lift let the uphill arc get clipped by the ground on about 16% of the
+   * walkable area, and the bite travelled as you walked. The blob now sits on
+   * the *highest* ground it covers, and this is the clearance above that; on
+   * the downhill side it therefore floats, which is much the lesser evil.
+   */
+  blobLift: 0.02,
 }
 
 /**

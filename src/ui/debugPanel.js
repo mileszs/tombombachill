@@ -25,7 +25,13 @@ import { CAMERA, OCCLUSION } from '../config.js'
  * can tell them apart, so the call site has to say which it is.
  */
 
-const TOGGLE_KEY = '~'
+/**
+ * Both, because `event.key` is the character *produced*: the backtick key alone
+ * gives '`' and only Shift gives '~'. Listening for '~' alone meant the panel
+ * opened on Shift+backtick while the console line below told you to press
+ * backtick, so the one tool for tuning the whole art direction looked broken.
+ */
+const TOGGLE_KEYS = new Set(['`', '~'])
 
 /** Long enough to coalesce a drag, short enough to feel like a response. */
 const REBUILD_DEBOUNCE_MS = 220
@@ -166,7 +172,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   for (const folder of [occ, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
-    if (event.key !== TOGGLE_KEY) return
+    if (!TOGGLE_KEYS.has(event.key)) return
     visible = !visible
     gui.domElement.style.display = visible ? '' : 'none'
   }

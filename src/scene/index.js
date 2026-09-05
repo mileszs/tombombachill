@@ -92,6 +92,12 @@ export function disposeWorld(world) {
   world.scene.traverse((object) => {
     object.geometry?.dispose()
 
+    // InstancedMesh keeps its matrix and colour buffers outside the geometry,
+    // and they are only released through its own dispose event — the traverse
+    // above walks straight past them. Five clutter meshes hold 80,000
+    // instances between them, which is about 6 MB a rebuild.
+    if (object.isInstancedMesh) object.dispose()
+
     const materials = Array.isArray(object.material)
       ? object.material
       : object.material
@@ -105,4 +111,13 @@ export function disposeWorld(world) {
       material.dispose()
     }
   })
+
+  // The largest single allocation in the scene is not in the scene graph at
+  // all. A light carries no geometry and no material, so the traverse never
+  // reaches it — and createWorld builds a fresh DirectionalLight every time,
+  // orphaning a 4096² depth target. That is ~64 MB per rebuild, and the debug
+  // panel fires a rebuild every 220 ms while you drag a colour picker.
+  // DirectionalLight.dispose() releases its own shadow map, so this is the
+  // whole of it.
+  world.lighting?.key.dispose()
 }
