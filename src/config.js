@@ -120,8 +120,15 @@ export const FOREST = {
  * thickens the existing patches before it fills the gaps between them.
  */
 export const CLUTTER = {
-  /** How many patches the undergrowth gathers into. */
-  clusterCount: 110,
+  /**
+   * How many patches the undergrowth gathers into.
+   *
+   * Fewer, better-separated patches read as undergrowth; enough of them to
+   * cover the disc reads as a lawn with a texture on it. At 110 patches of up
+   * to 6.5 m the clusters tiled most of the ground and the clustering stopped
+   * doing anything — see the note on `counts` below.
+   */
+  clusterCount: 78,
   /** Maximum radius of a single patch, in world units. */
   clusterRadius: 6.5,
   /** Clutter is scattered within this radius of the origin. */
@@ -136,10 +143,23 @@ export const CLUTTER = {
    * to make none of them.
    */
   boulderBlockRadius: 0.35,
+  /**
+   * These are a *legibility* dial, not just a density one. The art direction
+   * asks for a floor that stays readable under a high canopy; at the previous
+   * counts the ferns and tufts landed at roughly 2.1 and 5.9 per square metre
+   * of patch, which closed over the ground completely and left the player
+   * wading through scribble wherever he went.
+   *
+   * Halving them is a starting point, not a settled answer — raise them back
+   * towards 16000/45000 for a denser, wilder floor, or keep going down for a
+   * cleaner, more diorama-like one. `clusterCount` above moves with them: the
+   * per-patch density is counts ÷ clusterCount, so changing one alone changes
+   * how thick a single patch is as well as how much floor is covered.
+   */
   counts: {
-    ferns: 16000,
-    grassTufts: 45000,
-    wildflowers: 13000,
+    ferns: 6500,
+    grassTufts: 22000,
+    wildflowers: 9000,
     mushrooms: 4000,
     boulders: 2100,
   },
