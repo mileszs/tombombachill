@@ -19,8 +19,26 @@ export const light = {
     intensity: 2.4,
     /** Height above the horizon. Lower = longer shadows. */
     elevationDeg: 33.5,
-    /** Compass bearing the light comes from. */
-    azimuthDeg: 200,
+    /**
+     * Compass bearing the light comes from.
+     *
+     * This is the single most consequential number in the file, because the
+     * camera is fixed at bearing 30° and the *difference* is the whole read.
+     * At the original 200° the two were 170° apart — very nearly dead
+     * backlight — which put N·L = −0.821 on any trunk face pointing at the
+     * camera. Every vertical surface the player ever sees was lit entirely by
+     * the cool fill, so the warm/cool split survived only on the ground and on
+     * canopy tops, and 26 m shadows fell straight towards the lens and stacked
+     * up in the clearest part of the frame.
+     *
+     * At 95° the key rakes across instead: trunks and canopies get a lit side
+     * and a shade side, and the shadows cross the frame. The useful band is
+     * roughly 70–120°; past that it swings back towards frontal and the
+     * modelling flattens again. Note the ground's brightness does not change
+     * with this at all — its normal is up — so this knob can only ever affect
+     * vertical surfaces and where the shadows go.
+     */
+    azimuthDeg: 95,
     /** Only sets the shadow camera's depth range, not the light's falloff. */
     distance: 100,
   },
@@ -89,7 +107,8 @@ export const light = {
  *
  * Linear rather than exponential specifically because it has a near plane.
  * These are distances from the camera, so they only mean anything relative to
- * CAMERA.distance (30). Measured against the current framing:
+ * CAMERA.distance (30). Measured against the *establishing* framing, which is
+ * what they were composed for:
  *
  *   depth  9   bottom of the frame
  *   depth 18   the boombox and the halfling
@@ -97,6 +116,20 @@ export const light = {
  *   depth 51   top of the frame, ~86% hazed
  *   depth 56   `far` — solid fog colour
  *   depth 60+  everything beyond the frame, so no edge is ever visible
+ *
+ * The walking framing is a different frame and these were never retuned for
+ * it. At CAMERA.walkViewSize the frame spans depth 17 to 43, so the bottom
+ * edge sits 5 m clear of `near` and the top reaches only ~62% rather than 86%
+ * — a gentler gradient over a much shallower slice of world. Left as it is
+ * deliberately: it looks right in play, and the two framings wanting different
+ * fog is a real tension, not an oversight. If it ever needs settling, the
+ * honest fix is to scale near/far around CAMERA.distance by
+ * viewSize / CAMERA.viewSize, which reproduces the table above at both widths.
+ *
+ * Worth knowing that the boundary argument no longer binds at the walking
+ * width: the frame only reaches 15.7 m of ground past the focus, so the frame
+ * edge hides the world long before the fog has to. The fog is atmosphere
+ * there, and only the world's edge in the establishing shot.
  *
  * Exponential fog had no such plane — its haze started at the camera, which
  * under an orthographic projection meant a floor of haze over the whole frame
@@ -127,6 +160,28 @@ export const surface = {
     blendJitter: 0.22,
     /** World units covered by one repeat of the grass texture. */
     tileSize: 6,
+
+    /**
+     * Two darkenings baked into the same vertex tints, which is why they are
+     * colours rather than an occlusion map: an aoMap would have been the
+     * obvious tool and is the wrong one, because it multiplies only the
+     * *indirect* term — which in this rig is the entire cool half of the
+     * palette — so it would make enclosed ground warmer and flatter, exactly
+     * backwards.
+     *
+     * `standShade` is where the floor goes under a dense stand, driven by
+     * standDensity(). It costs nothing at runtime and it says something true:
+     * clearings read bright, stands read closed-in, and the clearings are where
+     * the audio sources live.
+     *
+     * `rootShade` is the contact darkening where a trunk meets the ground. The
+     * key light throws a shadow in one direction only; this is what stops a
+     * trunk reading as a pole standing on a lawn on the lit side.
+     */
+    standShade: 0x3f4a58,
+    standShadeStrength: 0.4,
+    rootShade: 0x35372c,
+    rootShadeStrength: 0.6,
   },
 
   /** Painted onto a canvas, so: CSS colour strings. Near-neutral by design. */

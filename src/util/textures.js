@@ -26,6 +26,74 @@ function makeCanvas(width, height) {
 }
 
 /**
+ * Push colour outwards into the transparent margin of an alpha-cut card.
+ *
+ * A canvas starts as RGBA (0,0,0,0) and stays that way wherever nothing is
+ * drawn. three uploads it unpremultiplied and then mipmaps it with a plain
+ * `generateMipmap`, which averages that *black* into the RGB of every texel
+ * along an edge. These cards end up ten to twenty pixels tall on screen, so
+ * they are drawn from a deep mip almost always, and the surviving fringe reads
+ * as every leaf being dirty rather than soft.
+ *
+ * Two passes of a four-neighbour dilate is enough at these sizes: the fringe is
+ * a mip-averaging artifact, not a wide halo, and it only needs plausible colour
+ * a texel or two out. Alpha is never touched, so alphaTest behaviour is
+ * unchanged and nothing that was invisible becomes visible.
+ */
+function bleedEdges(ctx, size, passes = 2) {
+  const image = ctx.getImageData(0, 0, size, size)
+  const px = image.data
+
+  for (let pass = 0; pass < passes; pass++) {
+    // Snapshot per pass, so colour spreads one ring at a time rather than
+    // racing across the tile in whatever order the loop happens to run.
+    const source = px.slice()
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4
+        if (source[i + 3] !== 0) continue
+
+        let r = 0
+        let g = 0
+        let b = 0
+        let found = 0
+        for (const [dx, dy] of NEIGHBOURS) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue
+          const n = (ny * size + nx) * 4
+          // Either genuinely painted, or filled by an earlier pass — which is
+          // how the colour walks outward one ring at a time. A filled texel is
+          // still fully transparent, so alpha alone cannot tell them apart.
+          const painted = source[n + 3] !== 0
+          const filled = source[n] + source[n + 1] + source[n + 2] > 0
+          if (!painted && !filled) continue
+          r += source[n]
+          g += source[n + 1]
+          b += source[n + 2]
+          found++
+        }
+        if (!found) continue
+
+        px[i] = r / found
+        px[i + 1] = g / found
+        px[i + 2] = b / found
+        // Alpha deliberately left at 0.
+      }
+    }
+  }
+
+  ctx.putImageData(image, 0, 0)
+}
+
+const NEIGHBOURS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+]
+
+/**
  * Draw the same shape nine times, once per wrap offset, so marks that cross an
  * edge reappear on the opposite side and the tile stays seamless.
  */
@@ -164,6 +232,8 @@ export function makeFernTexture({ size = 256, anisotropy = 1 } = {}) {
     }
   }
 
+  bleedEdges(ctx, size)
+
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   texture.anisotropy = anisotropy
@@ -190,6 +260,8 @@ export function makeGrassTuftTexture({ size = 128, anisotropy = 1 } = {}) {
     ctx.quadraticCurveTo(rootX + lean * 0.35, (base + tipY) / 2, rootX + lean, tipY)
     ctx.stroke()
   }
+
+  bleedEdges(ctx, size)
 
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
@@ -231,6 +303,8 @@ export function makeWildflowerTexture({ size = 128, anisotropy = 1 } = {}) {
     ctx.arc(headX, headY, petal * 0.5, 0, Math.PI * 2)
     ctx.fill()
   }
+
+  bleedEdges(ctx, size)
 
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace

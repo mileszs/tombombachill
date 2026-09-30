@@ -20,6 +20,7 @@ import {
   makeGrassTuftTexture,
   makeWildflowerTexture,
 } from '../util/textures.js'
+import { swayCard } from './wind.js'
 
 /**
  * The forest floor: a few thousand ferns, tufts, mushrooms, flowers and
@@ -301,13 +302,17 @@ export function createClutter({ avoid = [], anisotropy = 1 } = {}) {
   const group = new Object3D()
   group.name = 'clutter'
 
-  // FrontSide is deliberate — see makeCardGeometry.
+  // FrontSide is deliberate — see makeCardGeometry. swayCard is applied here
+  // and not to the mushrooms or boulders below: a fern bends, a stone does not.
   const cardMaterial = (map) =>
-    new MeshLambertMaterial({
-      map,
-      alphaTest: CARD_ALPHA_TEST,
-      transparent: false,
-    })
+    swayCard(
+      new MeshLambertMaterial({
+        map,
+        alphaTest: CARD_ALPHA_TEST,
+        transparent: false,
+        dithering: true,
+      }),
+    )
 
   const ferns = buildInstances(
     makeCardGeometry(0.8, 0.6, 2),
@@ -344,7 +349,7 @@ export function createClutter({ avoid = [], anisotropy = 1 } = {}) {
 
   const mushrooms = buildInstances(
     makeMushroomGeometry(),
-    new MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+    new MeshLambertMaterial({ vertexColors: true, flatShading: true, dithering: true }),
     rng,
     clusters,
     avoid,
@@ -360,7 +365,7 @@ export function createClutter({ avoid = [], anisotropy = 1 } = {}) {
 
   const boulders = buildInstances(
     makeBoulderGeometry(rng),
-    new MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+    new MeshLambertMaterial({ vertexColors: true, flatShading: true, dithering: true }),
     rng,
     clusters,
     avoid,

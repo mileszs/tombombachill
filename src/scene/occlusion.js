@@ -14,11 +14,20 @@ import { OCCLUSION } from '../config.js'
  * That is ~300 vector transforms a frame against 167 trees, which is cheaper
  * and far more stable than raycasting: a ray can slip between two canopies of
  * the same tree and flicker.
+ *
+ * Two shapes are tested, not one. Canopies are spheres. Trunks are *segments*,
+ * because they are the case a sphere test misses entirely: for a tree close to
+ * the camera the canopy has already climbed off the top of the player on
+ * screen, while the trunk — which starts at the ground — has not. Measured over
+ * the real forest, a trunk covers the player on about 15% of steps, and on 6%
+ * of them no canopy sphere is anywhere near enough to notice.
  */
 export function createOcclusionFade(trees) {
   const view = new Matrix4()
   const player = new Vector3()
   const centre = new Vector3()
+  const segA = new Vector3()
+  const segB = new Vector3()
 
   return {
     /**
@@ -56,6 +65,37 @@ export function createOcclusionFade(trees) {
               break
             }
           }
+
+          // The trunk, as a capsule. Two transforms rather than the twenty
+          // spheres it would take to tile a 17 m trunk at its own radius, and
+          // the closest-point parameter gives us the depth to compare at, so
+          // "is it in front of him" stays exact along the whole length.
+          if (!blocking && tree.trunk) {
+            segA.copy(tree.trunk.base).applyMatrix4(view)
+            segB.copy(tree.trunk.top).applyMatrix4(view)
+
+            const ex = segB.x - segA.x
+            const ey = segB.y - segA.y
+            const lengthSq = ex * ex + ey * ey
+            let t = 0
+            if (lengthSq > 1e-8) {
+              t = ((player.x - segA.x) * ex + (player.y - segA.y) * ey) / lengthSq
+              t = Math.min(1, Math.max(0, t))
+            }
+
+            const nearestX = segA.x + ex * t
+            const nearestY = segA.y + ey * t
+            const ox = nearestX - player.x
+            const oy = nearestY - player.y
+            const reach = tree.trunk.radius + OCCLUSION.trunkClearance
+
+            if (ox * ox + oy * oy < reach * reach) {
+              // Depth at that same point along the trunk, so a trunk standing
+              // behind him never fades.
+              const depth = -(segA.z + (segB.z - segA.z) * t)
+              if (depth < playerDepth) blocking = true
+            }
+          }
         }
 
         const target = blocking ? OCCLUSION.fadedOpacity : 1
@@ -67,9 +107,21 @@ export function createOcclusionFade(trees) {
         tree.applied = tree.fade
 
         const faded = tree.fade < 0.995
+        // Flipping `transparent` is a shader *program* change in three, not a
+        // uniform, and needsProgramChange does not look at it — so without a
+        // needsUpdate the material keeps its `#define OPAQUE`, which forces
+        // `diffuseColor.a = 1.0`, and the whole fade is discarded in the
+        // fragment shader. This cost the feature its entire existence once.
+        //
+        // Guarded on the *transition*: recompiling 334 materials on every frame
+        // of the ease would stall the walk.
+        const flipped = faded !== tree.wasFaded
+        tree.wasFaded = faded
+
         for (const material of tree.materials) {
           material.opacity = tree.fade
           material.transparent = faded
+          if (flipped) material.needsUpdate = true
           // While faded it must not write depth, or it would still hide the
           // player: he is drawn in the transparent pass before it, being
           // further away, and a depth write here would reject his fragments.
@@ -81,8 +133,9 @@ export function createOcclusionFade(trees) {
 }
 
 /**
- * Collect what the fade needs from a finished tree: its own materials, and a
- * world-space sphere per canopy. Called once at build.
+ * Collect what the fade needs from a finished tree: its own materials, a
+ * world-space sphere per canopy, and the trunk as a world-space segment.
+ * Called once at build.
  */
 export function collectOccluder(tree) {
   tree.updateMatrixWorld(true)
@@ -90,12 +143,26 @@ export function collectOccluder(tree) {
   const spheres = []
   const materials = new Set()
   const scale = new Vector3()
+  let trunk = null
 
   tree.traverse((node) => {
     if (!node.isMesh) return
     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
       materials.add(material)
     }
+
+    if (node.userData.isTrunk) {
+      // The trunk mesh is a cylinder centred on its own middle, so its ends are
+      // ±height/2 along its local Y. Transformed, that survives the tree's lean.
+      const { trunkHeight, trunkRadius } = node.userData
+      trunk = {
+        base: new Vector3(0, -trunkHeight / 2, 0).applyMatrix4(node.matrixWorld),
+        top: new Vector3(0, trunkHeight / 2, 0).applyMatrix4(node.matrixWorld),
+        radius: trunkRadius,
+      }
+      return
+    }
+
     if (!node.userData.isCanopy) return
 
     node.geometry.computeBoundingSphere()
@@ -111,8 +178,10 @@ export function collectOccluder(tree) {
     x: tree.position.x,
     z: tree.position.z,
     spheres,
+    trunk,
     materials: [...materials],
     fade: 1,
     applied: 1,
+    wasFaded: false,
   }
 }

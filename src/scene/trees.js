@@ -12,6 +12,7 @@ import { surface } from '../palette.js'
 import { noise2D, terrainHeight } from '../util/terrain.js'
 import { makeRng, pick, randRange } from '../util/rng.js'
 import { collectOccluder } from './occlusion.js'
+import { swayCanopy } from './wind.js'
 
 /**
  * No canopy may hang lower than this, in metres. Keeps the band at eye level
@@ -41,11 +42,21 @@ const FIELD_MAX = 0.68
  * icospheres. Shape, height and colour are all drawn from the shared seed.
  */
 
-// A small shared set of materials rather than one per tree — 40 trees, ~8
-// materials — drawn from the bark/leaf swatches in the palette.
+/**
+ * Prototypes drawn from the bark/leaf swatches in the palette. Every tree
+ * clones one of these rather than sharing it — see createTree — so these eight
+ * are never rendered themselves; they exist only to be copied from.
+ *
+ * `vertexColors` is not decorative. Canopy geometry carries a baked warm/cool
+ * ramp in a `color` attribute and needs it true; trunk geometry carries no such
+ * attribute and needs it false, because a Lambert material asking for a vertex
+ * colour that is not there reads (0,0,0) and renders the trunk black. That is
+ * the whole reason this takes an argument.
+ */
 function makeMaterials(colors, vertexColors = false) {
   return colors.map(
-    (color) => new MeshLambertMaterial({ color, flatShading: true, vertexColors }),
+    (color) =>
+      new MeshLambertMaterial({ color, flatShading: true, vertexColors, dithering: true }),
   )
 }
 
@@ -130,13 +141,23 @@ function createTree(rng, barkMaterials, leafMaterials, out) {
   trunk.position.y = trunkHeight / 2
   trunk.castShadow = true
   trunk.receiveShadow = true
+  // The occluder fade tests the trunk as a capsule, and a cylinder's ends are
+  // at ±height/2 in its own space — so it needs the height as well as the
+  // radius to rebuild that segment in world space after the tree's lean.
+  trunk.userData.isTrunk = true
+  trunk.userData.trunkHeight = trunkHeight
+  trunk.userData.trunkRadius = bottomRadius
   tree.add(trunk)
 
   // Cloned per tree: these materials are what the occlusion fade writes
   // opacity to, and the palette swatches are shared between trees. Fading a
   // shared material would ghost every tree using it. Costs nothing in draw
   // calls — each tree already has its own geometry, so its own draw call.
-  const leafMaterial = pick(rng, leafMaterials).clone()
+  // swayCanopy has to come after the clone: onBeforeCompile is a prototype
+  // method on Material, so assigning it makes an own property and clone() does
+  // not carry it. Patch the prototype material instead and every tree stands
+  // perfectly still.
+  const leafMaterial = swayCanopy(pick(rng, leafMaterials).clone())
   const canopyRadius = (height - trunkHeight) * randRange(rng, 0.34, 0.78)
 
   const canopy = new Mesh(makeCanopyGeometry(canopyRadius, rng, CANOPY_ROUGHEN), leafMaterial)
@@ -281,7 +302,11 @@ function scatterPositions(rng) {
 export function createForest() {
   const rng = makeRng(SEED + 7)
   const barkMaterials = makeMaterials(surface.bark)
-  const leafMaterials = makeMaterials(surface.leaf)
+  // true, because makeCanopyGeometry bakes the canopyShade ramp into a `color`
+  // attribute on every canopy. Without it the ramp is computed, uploaded and
+  // then ignored by the GPU, and every canopy renders as a flat green ball —
+  // which is exactly what it did from the initial commit until it was measured.
+  const leafMaterials = makeMaterials(surface.leaf, true)
 
   const object = new Group()
   object.name = 'forest'

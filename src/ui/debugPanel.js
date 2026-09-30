@@ -2,7 +2,8 @@ import GUI from 'lil-gui'
 import { light, fog, surface } from '../palette.js'
 import { TONE_MAPPINGS, applyToneMapping } from '../core/renderer.js'
 import { applyLighting } from '../scene/lighting.js'
-import { CAMERA } from '../config.js'
+import { CAMERA, OCCLUSION, WIND } from '../config.js'
+import { applyWind } from '../scene/wind.js'
 
 /**
  * Live controls over palette.js. Toggle with the backtick key.
@@ -25,7 +26,13 @@ import { CAMERA } from '../config.js'
  * can tell them apart, so the call site has to say which it is.
  */
 
-const TOGGLE_KEY = '~'
+/**
+ * Both, because `event.key` is the character *produced*: the backtick key alone
+ * gives '`' and only Shift gives '~'. Listening for '~' alone meant the panel
+ * opened on Shift+backtick while the console line below told you to press
+ * backtick, so the one tool for tuning the whole art direction looked broken.
+ */
+const TOGGLE_KEYS = new Set(['`', '~'])
 
 /** Long enough to coalesce a drag, short enough to feel like a response. */
 const REBUILD_DEBOUNCE_MS = 220
@@ -116,6 +123,28 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedColor(ground, surface.ground, 'soil')
   bakedNum(ground, surface.ground, 'blendJitter', 0, 1, 0.01)
   bakedNum(ground, surface.ground, 'tileSize', 2, 30, 0.5)
+  bakedColor(ground, surface.ground, 'standShade').name('under a stand')
+  bakedNum(ground, surface.ground, 'standShadeStrength', 0, 1, 0.01).name('stand shade amount')
+  bakedColor(ground, surface.ground, 'rootShade').name('trunk contact')
+  bakedNum(ground, surface.ground, 'rootShadeStrength', 0, 1, 0.01).name('contact amount')
+
+  // ---- Occlusion: live, read fresh every frame -----------------------
+  // Worth having a panel for: none of these had ever been seen until the fade
+  // was fixed, so they are the least-tuned numbers in the project.
+  const occ = gui.addFolder('Occluder fade')
+  occ.add(OCCLUSION, 'fadedOpacity', 0, 1, 0.01).name('faded to')
+  occ.add(OCCLUSION, 'playerClearance', 0, 3, 0.05).name('canopy clearance (m)')
+  occ.add(OCCLUSION, 'trunkClearance', 0, 3, 0.05).name('trunk clearance (m)')
+  occ.add(OCCLUSION, 'fadeSpeed', 0.5, 20, 0.5).name('fade speed')
+
+  // ---- Wind: live, because it is all uniforms ------------------------
+  const wind = gui.addFolder('Wind')
+  const rewind = () => applyWind()
+  wind.add(WIND, 'canopyAmplitude', 0, 0.8, 0.005).name('canopy sway (m)').onChange(rewind)
+  wind.add(WIND, 'canopySpeed', 0, 2, 0.01).name('canopy speed').onChange(rewind)
+  wind.add(WIND, 'cardAmplitude', 0, 0.2, 0.002).name('undergrowth sway (m)').onChange(rewind)
+  wind.add(WIND, 'cardSpeed', 0, 4, 0.01).name('undergrowth speed').onChange(rewind)
+  wind.add(WIND, 'waveNumber', 0, 0.6, 0.005).name('wave / metre').onChange(rewind)
 
   const grass = gui.addFolder('Grass texture — rebuilds')
   bakedColor(grass, surface.grass, 'base')
@@ -154,10 +183,10 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [grass, trees, clutter, props]) folder.close()
+  for (const folder of [occ, wind, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
-    if (event.key !== TOGGLE_KEY) return
+    if (!TOGGLE_KEYS.has(event.key)) return
     visible = !visible
     gui.domElement.style.display = visible ? '' : 'none'
   }

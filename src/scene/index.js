@@ -9,6 +9,7 @@ import { createCollider } from './collision.js'
 import { createOcclusionFade } from './occlusion.js'
 import { createPlayer } from './player.js'
 import { createBoombox } from './boombox.js'
+import { advanceWind } from './wind.js'
 
 /**
  * Assembles the world. Returns the scene plus handles to the things later
@@ -28,11 +29,15 @@ export function createWorld(renderer) {
   // Centre the shadow camera on what the view camera is framing, not on the
   // world origin.
   const lighting = createLighting(scene, CAMERA.target)
-  scene.add(createGround({ anisotropy }))
 
+  // The forest is built before the ground, not after: the ground bakes the
+  // contact shading under each trunk straight into its vertex colours, so it
+  // needs the trunk positions and radii first.
   const forest = createForest()
   scene.add(forest.object)
   const occlusion = createOcclusionFade(forest.occluders)
+
+  scene.add(createGround({ anisotropy, trunks: forest.positions }))
 
   // Clutter needs the trunk positions so it doesn't grow through the trees;
   // collision needs their radii too.
@@ -67,6 +72,7 @@ export function createWorld(renderer) {
      * @param input  from core/input.js
      */
     update(dt, rig, input) {
+      advanceWind(dt)
       player.update(dt, rig.camera, input, collider)
       rig.follow(player.position.x, player.position.z, dt)
       // The shadow box is only ±extent wide, so it has to travel too.
@@ -92,6 +98,12 @@ export function disposeWorld(world) {
   world.scene.traverse((object) => {
     object.geometry?.dispose()
 
+    // InstancedMesh keeps its matrix and colour buffers outside the geometry,
+    // and they are only released through its own dispose event — the traverse
+    // above walks straight past them. Five clutter meshes hold 80,000
+    // instances between them, which is about 6 MB a rebuild.
+    if (object.isInstancedMesh) object.dispose()
+
     const materials = Array.isArray(object.material)
       ? object.material
       : object.material
@@ -105,4 +117,13 @@ export function disposeWorld(world) {
       material.dispose()
     }
   })
+
+  // The largest single allocation in the scene is not in the scene graph at
+  // all. A light carries no geometry and no material, so the traverse never
+  // reaches it — and createWorld builds a fresh DirectionalLight every time,
+  // orphaning a 4096² depth target. That is ~64 MB per rebuild, and the debug
+  // panel fires a rebuild every 220 ms while you drag a colour picker.
+  // DirectionalLight.dispose() releases its own shadow map, so this is the
+  // whole of it.
+  world.lighting?.key.dispose()
 }

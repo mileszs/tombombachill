@@ -9,6 +9,26 @@ export const SEED = 20260728
 /** Ground plane is WORLD_SIZE x WORLD_SIZE, centred on the origin. */
 export const WORLD_SIZE = 160
 
+export const GROUND = {
+  /**
+   * Grid resolution of the displaced plane. This is not only a terrain-shape
+   * number any more: the trunk contact shading is baked into the same vertex
+   * colours, so the grid also has to be fine enough to draw a ~1.4 m ring
+   * without it going blocky. At 288 over 160 m a vertex is every 0.56 m, which
+   * puts about five of them across the ring.
+   *
+   * It is one mesh either way, so the cost is build time and memory, not draw
+   * calls.
+   */
+  segments: 288,
+  /**
+   * How far the contact darkening reaches from the centre of a trunk. Scaled
+   * by each trunk's own radius, so the big trees sit heavier than the small
+   * ones.
+   */
+  rootShadeRadius: 2.1,
+}
+
 export const CAMERA = {
   /**
    * Down-angle from the horizon. True isometric is 35.26°; at this angle the
@@ -100,8 +120,15 @@ export const FOREST = {
  * thickens the existing patches before it fills the gaps between them.
  */
 export const CLUTTER = {
-  /** How many patches the undergrowth gathers into. */
-  clusterCount: 110,
+  /**
+   * How many patches the undergrowth gathers into.
+   *
+   * Fewer, better-separated patches read as undergrowth; enough of them to
+   * cover the disc reads as a lawn with a texture on it. At 110 patches of up
+   * to 6.5 m the clusters tiled most of the ground and the clustering stopped
+   * doing anything — see the note on `counts` below.
+   */
+  clusterCount: 78,
   /** Maximum radius of a single patch, in world units. */
   clusterRadius: 6.5,
   /** Clutter is scattered within this radius of the origin. */
@@ -116,10 +143,23 @@ export const CLUTTER = {
    * to make none of them.
    */
   boulderBlockRadius: 0.35,
+  /**
+   * These are a *legibility* dial, not just a density one. The art direction
+   * asks for a floor that stays readable under a high canopy; at the previous
+   * counts the ferns and tufts landed at roughly 2.1 and 5.9 per square metre
+   * of patch, which closed over the ground completely and left the player
+   * wading through scribble wherever he went.
+   *
+   * Halving them is a starting point, not a settled answer — raise them back
+   * towards 16000/45000 for a denser, wilder floor, or keep going down for a
+   * cleaner, more diorama-like one. `clusterCount` above moves with them: the
+   * per-patch density is counts ÷ clusterCount, so changing one alone changes
+   * how thick a single patch is as well as how much floor is covered.
+   */
   counts: {
-    ferns: 16000,
-    grassTufts: 45000,
-    wildflowers: 13000,
+    ferns: 6500,
+    grassTufts: 22000,
+    wildflowers: 9000,
     mushrooms: 4000,
     boulders: 2100,
   },
@@ -145,6 +185,44 @@ export const PLAYER = {
   bobSquash: 0.07,
   /** How fast the bob winds up and down when starting and stopping, per second. */
   bobEase: 8,
+
+  /**
+   * How far the contact shadow floats above the ground.
+   *
+   * It is a flat quad and the ground is not flat: over the blob's own radius a
+   * 9.3° slope — the steepest the terrain reaches — climbs 5.9 cm, so a 3 cm
+   * lift let the uphill arc get clipped by the ground on about 16% of the
+   * walkable area, and the bite travelled as you walked. The blob now sits on
+   * the *highest* ground it covers, and this is the clearance above that; on
+   * the downhill side it therefore floats, which is much the lesser evil.
+   */
+  blobLift: 0.02,
+}
+
+/**
+ * Wind.
+ *
+ * Nothing in the forest moved, and with a fixed orthographic camera there is no
+ * parallax either — so motion is the only depth cue left. Two bands: a slow
+ * roll through the canopies, and a faster, much smaller shiver through the
+ * ground cards. Slowness is a material here, so err towards too slow.
+ *
+ * Amplitudes are metres of horizontal displacement. The canopy moves as a rigid
+ * clump (a per-vertex offset would fight the flat shading, which derives its
+ * normals from screen-space derivatives); the cards bend, masked by their own
+ * UV so the base stays planted in the ground.
+ */
+export const WIND = {
+  canopyAmplitude: 0.17,
+  canopySpeed: 0.33,
+  cardAmplitude: 0.035,
+  cardSpeed: 1.15,
+  /**
+   * How fast the wave travels across the forest, in radians per metre. Small
+   * numbers make whole stands move together; large ones make neighbours
+   * disagree and it stops reading as wind.
+   */
+  waveNumber: 0.12,
 }
 
 /**
@@ -174,10 +252,35 @@ export const WORLD = {
  * blankets 21 m of it and the player walks under something often.
  */
 export const OCCLUSION = {
-  /** What a blocking tree fades to. 0 would read as the tree vanishing. */
-  fadedOpacity: 0.22,
-  /** Metres of clearance kept around the player before a tree counts as blocking. */
-  playerClearance: 1.2,
+  /**
+   * What a blocking tree fades to.
+   *
+   * Every number in this block was chosen before the fade had ever actually
+   * rendered — it was inert from the initial commit until 2026-09 — so treat
+   * them as a first look rather than as settled. At the original 0.22 a faded
+   * canopy over the bright fog stopped reading as a tree at all and came apart
+   * into a mess of translucent facet edges, which got worse once the canopy
+   * vertex ramp and the raking key gave those facets real contrast. 0.45 holds
+   * together as a dome you can see through, and the player still reads clearly
+   * against it.
+   */
+  fadedOpacity: 0.45,
+  /**
+   * Metres of clearance kept around the player before a canopy counts as
+   * blocking. Small, because the canopy is tested as a *bounding sphere* and
+   * that is already generous: a rotated, non-uniformly scaled icosphere is
+   * bounded by its largest scale component, so the test circle can be half
+   * again the width of the leaves you can actually see. Adding much on top of
+   * that ghosts trees that are nowhere near him.
+   */
+  playerClearance: 0.3,
+  /**
+   * The same, for trunks — deliberately tighter. A canopy is a soft mass and
+   * fading it early costs nothing; a trunk is a hard narrow blocker standing at
+   * eye level, and a generous clearance here would ghost half the stand every
+   * time you walked past one.
+   */
+  trunkClearance: 0.5,
   /** How fast a tree fades in and out, per second. */
   fadeSpeed: 6,
   /** Trees further than this from the player are never tested. */

@@ -91,8 +91,11 @@ pitch a canopy at height *h* covers `h/tan(35°)` = 1.43·h metres of ground
 Measured across the finished forest, something stands between the camera and the
 player on roughly **three quarters of steps**. Raising the canopy cannot fix
 this; only a steeper camera could, and the pitch is fixed by the diorama look.
-Trees that block him fade to 22% and back — `scene/occlusion.js`, tuned by the
-`OCCLUSION` block in `config.js`.
+Trees that block him fade to 45% and back — `scene/occlusion.js`, tuned by the
+`OCCLUSION` block in `config.js` and by its folder in the debug panel. Canopies
+are tested as bounding spheres, trunks as capsules. Note this feature was inert
+from the initial commit until 2026-09, so its numbers are the least-settled in
+the project; `docs/DECISIONS.md` says why and how to tell.
 
 **Golden hour.** Warm amber key light at a low angle against a *cooler* fill.
 The warm/cool split is the entire look — if lit areas and shadowed areas are the
@@ -100,6 +103,20 @@ same hue and differ only in brightness, something is wrong. Note that lighting i
 multiplicative: a surface with near-zero blue in its albedo cannot reflect a
 blue-violet fill, so ground colors need some blue in them even though the swatch
 looks duller.
+
+The key's `azimuthDeg` only means anything *relative to the camera's bearing of
+30°*, and it is the most consequential number in `palette.js`. It sat at 200 —
+170° away, near-dead backlight — which put N·L = −0.821 on any trunk face
+pointing at the camera, so every vertical surface in the game was lit purely by
+the cool fill and the split survived only on the ground and canopy tops. It is
+now 95, raking. The useful band is roughly 70–120°. The ground's brightness does
+not change with this at all, so it is a safe thing to push around.
+
+**The forest moves.** A slow roll through the canopies and a faster shiver
+through the undergrowth, done entirely in the vertex shader — `scene/wind.js`,
+tuned by the `WIND` block. With a fixed orthographic camera there is no parallax
+either, so motion is the only depth cue left, and slowness being a material
+makes a slow wind exactly on-theme. Err towards too slow.
 
 **All color and light values live in `src/palette.js`** — a pure leaf module with
 zero imports. Roles are named, not colors (`fill`, not `violet`). Never hardcode
@@ -113,8 +130,9 @@ the player by *translating only* — `lookAt` is called once, at construction.
 Pulling back breaks the audio design: the pull of this game is hearing something
 you can't see yet, so the camera must reveal less than the ears do.
 
-**Open tension, recorded rather than settled.** The player currently reads as a
-small figure — about 4% of frame height — which is the "small detail in a wide
+**Open tension, recorded rather than settled.** The player reads as a small
+figure — 3.8% of frame height in the establishing shot, 6.4% once the camera has
+pushed in to `walkViewSize` — which is the "small detail in a wide
 landscape" this section used to warn against. Framing him larger was tried and
 abandoned: at `viewSize` 16 the camera sits *inside* the canopy layer, one 20 m
 tree fills half the frame, and its canopy hides both the player and the boombox.
@@ -155,7 +173,8 @@ sends rather than sources.
 - **Phase 1 — Walking.** Done. WASD and arrows, camera follow, sprite flip,
   code-driven bob and squash (no animation frames), soft circular collision,
   bounded edge. Plus an occluder fade, which turned out to be necessary — see
-  art direction.
+  art direction — and, after a visual audit in 2026-09, wind, contact shading
+  baked into the ground, and a raking key.
 - **Phase 2 — One sound.** Next. Audio engine, one source, distance gain.
 - **Phase 3 — The mixing board.** All stems, `zones.json`, the four-source sweet
   spot that is unmarked and findable only by accident.
