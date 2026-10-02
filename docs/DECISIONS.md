@@ -531,6 +531,63 @@ changed nothing. It was the only hardcoded hex outside `palette.js` in `src/`.
 
 ---
 
+## Player lighting
+
+### He is lit by the rig now, through invented normals
+
+He used to be `MeshBasicMaterial`, unlit, so he was the one thing in frame the
+golden hour never touched: a near-white tunic glowing in deep canopy shade,
+reading as a sticker on the scene. He is now Lambert, receives shadows, and has
+normals curved across his width like a cylinder (`shapeNormals` in
+`scene/player.js`), so the side towards the key goes warm and the far side drops
+into the cool fill. Tuned live by `light.player` in `palette.js` and the
+"Player light" panel folder. Measured on the tunic in sun: the right-minus-left
+brightness goes +23 (painted shading alone, roundness 0) → +36 (60°) → +43 (90°).
+
+`lift` is an emissive floor, using his own texture as the emissive map so it
+brightens rather than greys him. Without it, deep shade turns him into a
+silhouette, and he is the one thing that must always read.
+
+### The card stands upright; it does not copy the camera's rotation
+
+A quad that copies `camera.quaternion` leans back 35°, which puts his head about
+0.7 m nearer the lens than his feet. Unlit, nobody could tell. Once he receives
+shadows, his top half tests ground he isn't standing over: legs in the sun,
+body in shade, speckled where the two disagree. He now turns only to the
+camera's bearing (`rotation.y = yaw`) and is stretched by `1/cos(pitch)` so the
+foreshortening leaves him exactly the size on screen he was. Note this makes the
+card 1.40 m tall in world space; `PROPS.playerHeight` is still his *apparent*
+height and still the scale anchor.
+
+### Three normal traps on a scaled, mirrored card
+
+- **Non-uniform scale bends normals.** three transforms normals by the inverse
+  scale, and the card is a unit quad stretched to 0.57 × 1.40, so normals are
+  pre-multiplied by the scale when written. The bob's ±7% squash is ignored.
+- **The mirror flip must flip them, and does.** Scaling x by −1 mirrors the
+  normals too, which keeps the lit edge on the sunny side of the *screen*
+  whichever way he faces. Verified both facings: roundness brightens
+  screen-right either way.
+- **`FrontSide`, not `DoubleSide`.** With DoubleSide three negates the normal
+  of any fragment it decides is a back face, which would put the lit edge in
+  shade. three corrects the winding for a negative-determinant matrix, so the
+  mirrored card is still front-facing and nothing is culled.
+
+### Visual checks: a headless Chrome harness that works
+
+The occlusion note above says software rendering is too slow for in-scene tests.
+That was SwiftShader. Driving the installed Google Chrome through
+`playwright-core` with `--use-angle=metal --enable-gpu --ignore-gpu-blocklist`
+gets the real GPU at ~55 fps, which is enough to walk him into sun and shade and
+screenshot both. Values can be changed live by importing `palette.js` *in the
+page*, but **import the exact URL the app loaded**: after a hot update Vite
+serves it as `palette.js?t=…`, and a bare `import('/src/palette.js')` gets a
+second, disconnected copy that silently changes nothing. Find it with
+`performance.getEntriesByType('resource')`. Wind moves the whole frame, so
+pixel-diffing two screenshots is noise; measure fixed crops instead.
+
+---
+
 ## Phase 2 — one sound
 
 ### Plain Web Audio, not Tone.js

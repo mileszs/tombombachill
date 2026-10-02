@@ -73,7 +73,7 @@ export function createWorld(renderer) {
      */
     update(dt, rig, input) {
       advanceWind(dt)
-      player.update(dt, rig.camera, input, collider)
+      player.update(dt, input, collider)
       rig.follow(player.position.x, player.position.z, dt)
       // The shadow box is only ±extent wide, so it has to travel too.
       followLighting(lighting, rig.focus.x, rig.focus.z)

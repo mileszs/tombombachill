@@ -175,7 +175,8 @@ sends rather than sources.
   code-driven bob and squash (no animation frames), soft circular collision,
   bounded edge. Plus an occluder fade, which turned out to be necessary — see
   art direction — and, after a visual audit in 2026-09, wind, contact shading
-  baked into the ground, and a raking key.
+  baked into the ground, and a raking key. In 2026-10 the player was lit by
+  the rig (upright card, curved normals, receives shadows) instead of unlit.
 - **Phase 2 — One sound.** Done. Audio engine, one source (a full-mix
   placeholder on the boombox, not a real stem), squared distance falloff,
   screen-relative pan, fade-in on entering.

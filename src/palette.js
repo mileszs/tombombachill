@@ -60,6 +60,32 @@ export const light = {
     intensity: 0.3,
   },
 
+  /**
+   * How the player sprite takes the light. He is a flat card, so his normals
+   * are invented: curved across his width like a cylinder, so the side towards
+   * the key catches it warm and the far side drops into the cool fill — the
+   * same split the trunks get. Read live every frame by scene/player.js.
+   */
+  player: {
+    /**
+     * How far round the curve goes at his edges, in degrees. 0 is a flat card
+     * facing the camera, all one brightness; 90 is a full half-cylinder.
+     */
+    roundnessDeg: 60,
+    /**
+     * How much the normals tip towards the sky. The ground and the undergrowth
+     * face straight up and are lit mostly by the fill; without some of this he
+     * would sit darker and bluer than the floor he is standing on.
+     */
+    skyward: 0.35,
+    /**
+     * A floor under his brightness, added on top of the lighting and coloured
+     * by his own texture. Deep canopy shade would otherwise swallow him, and
+     * he is the one thing in frame that must always read.
+     */
+    lift: 0x443e38,
+  },
+
   shadow: {
     /**
      * Half-width of the shadow camera box, centred on what the view camera is

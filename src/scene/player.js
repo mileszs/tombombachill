@@ -1,25 +1,36 @@
 import {
-  DoubleSide,
+  FrontSide,
   Group,
+  MathUtils,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   PlaneGeometry,
   SRGBColorSpace,
   TextureLoader,
 } from 'three'
 import { CAMERA, PLAYER, PROPS } from '../config.js'
+import { light } from '../palette.js'
 import { terrainHeight } from '../util/terrain.js'
 import { makeBlobShadowTexture } from '../util/textures.js'
 
 /**
  * The player: a barefoot child in a plain tunic and rolled trousers, drawn
- * from behind, as a billboard plane that turns to face the camera every frame.
- * The camera is fixed today, but controls are coming, so the billboarding is
- * real rather than baked into the initial rotation.
+ * from behind, as an upright card turned to face the camera's bearing.
  *
- * A camera-facing quad leans back at the camera's pitch, which makes for an
- * odd cast shadow, so the sprite doesn't cast — a soft blob on the ground
- * plants it instead.
+ * Upright, not leaning back at the camera's pitch. A fully camera-facing quad
+ * puts his head ~0.7 m nearer the lens than his feet, so once he receives
+ * shadows his top half tests ground he isn't standing over — legs in the sun,
+ * body in shade, speckled where the two disagree. Standing him up makes every
+ * pixel of him test the column directly above his feet, as a real figure would.
+ * An upright card is foreshortened by cos(pitch) on screen, so it is stretched
+ * by the inverse to stay exactly the size it was.
+ *
+ * The card doesn't cast — a flat figure throws a strange shadow — so a soft
+ * blob on the ground plants him instead. It does receive shadows, and it is lit
+ * by the same rig as everything else, through normals invented for it (see
+ * shapeNormals). Unlit, he was the one thing in frame the golden hour never
+ * touched.
  */
 
 /** Served from public/, so this is the URL path, not a filesystem path. */
@@ -27,6 +38,43 @@ const SPRITE_URL = '/sprites/player.png'
 
 /** Fallback aspect used until the image loads and reports its real one. */
 const ASSUMED_ASPECT = 0.5
+
+/**
+ * Columns across the quad, so the curved normals have somewhere to curve.
+ * Lambert lights per fragment, so a handful is already smooth.
+ */
+const NORMAL_COLUMNS = 6
+
+const PITCH = MathUtils.degToRad(CAMERA.pitchDeg)
+const YAW = MathUtils.degToRad(CAMERA.yawDeg)
+
+/**
+ * Write cylinder-like normals across the sprite, in its own local space.
+ *
+ * The card stands upright facing the camera's bearing, so local +Z is level
+ * and points at the camera, and local +Y is world up. Each column's normal
+ * swings round from +Z by an angle that grows towards the edges, then tips
+ * towards the sky by `skyward`.
+ *
+ * The mesh is scaled non-uniformly (it is a unit quad stretched to his size),
+ * and three transforms normals by the *inverse* of that scale. So each normal is
+ * pre-multiplied by the scale here, and comes out pointing where it was meant
+ * to. The mirroring flip is deliberately left out of that: mirroring the quad
+ * should mirror its normals, so the lit edge stays on the sunny side of the
+ * screen whichever way he faces. The bob's ±7% squash is ignored.
+ */
+function shapeNormals(geometry, width, height, { roundnessDeg, skyward }) {
+  const position = geometry.attributes.position
+  const normal = geometry.attributes.normal
+  const reach = MathUtils.degToRad(roundnessDeg)
+
+  for (let i = 0; i < position.count; i++) {
+    // The quad spans x ∈ [−0.5, 0.5]; centre column faces the camera.
+    const angle = position.getX(i) * 2 * reach
+    normal.setXYZ(i, Math.sin(angle) * width, skyward * height, Math.cos(angle))
+  }
+  normal.needsUpdate = true
+}
 
 /** Rim samples used to find the highest ground under the contact shadow. */
 const BLOB_PROBES = [
@@ -44,23 +92,32 @@ export function createPlayer({ anisotropy = 1 } = {}) {
   group.position.set(x, terrainHeight(x, z), z)
 
   const height = PROPS.playerHeight
+  /** The card's real height: stretched so that, foreshortened, he is `height` on screen. */
+  const cardHeight = height / Math.cos(PITCH)
 
   // A unit quad with its origin at the bottom edge, so the sprite pivots on
   // its feet and can be scaled to whatever aspect the texture turns out to be.
-  const geometry = new PlaneGeometry(1, 1)
+  const geometry = new PlaneGeometry(1, 1, NORMAL_COLUMNS, 1)
   geometry.translate(0, 0.5, 0)
 
-  const material = new MeshBasicMaterial({
+  const material = new MeshLambertMaterial({
     transparent: true,
     // alphaTest rather than sorted transparency: no depth-order surprises when
     // the sprite stands among the trees.
     alphaTest: 0.4,
-    side: DoubleSide,
+    // Front only. With DoubleSide three flips the normal of any fragment it
+    // thinks is a back face, which would turn the lit edge dark. The quad
+    // always faces the camera, and three corrects the winding itself when the
+    // mirroring flip makes the scale negative, so nothing is ever culled.
+    side: FrontSide,
   })
 
   const sprite = new Mesh(geometry, material)
   sprite.castShadow = false
-  sprite.scale.set(height * ASSUMED_ASPECT, height, 1)
+  sprite.receiveShadow = true
+  sprite.scale.set(height * ASSUMED_ASPECT, cardHeight, 1)
+  // Constant, because the camera never rotates; it only ever translates.
+  sprite.rotation.set(0, YAW, 0)
   // The texture arrives asynchronously while the rest of the world is built
   // synchronously, so there's a window where this material has no map at all —
   // during which it would draw as a plain white quad. Stay hidden until dressed.
@@ -96,11 +153,22 @@ export function createPlayer({ anisotropy = 1 } = {}) {
   /** Radius the blob's gradient actually reaches, kept for the ground probe. */
   let blobRadius = height * ASSUMED_ASPECT * 1.25 * 0.5
 
+  /** What the normals were last shaped for, so they're only rewritten on a change. */
+  let shapedFor = ''
+  const reshape = () => {
+    const { roundnessDeg, skyward } = light.player
+    const key = `${baseWidth}|${roundnessDeg}|${skyward}`
+    if (key === shapedFor) return
+    shapedFor = key
+    shapeNormals(geometry, baseWidth, cardHeight, light.player)
+  }
+  reshape()
+
   const fitToTexture = (image) => {
     // Height is authoritative; width follows the image so the sprite is never
     // stretched, whatever dimensions the art happens to be.
     baseWidth = height * (image.width / image.height)
-    sprite.scale.set(baseWidth, height, 1)
+    sprite.scale.set(baseWidth, cardHeight, 1)
     blob.scale.setScalar(baseWidth * 1.25)
     blobRadius = baseWidth * 1.25 * 0.5
   }
@@ -114,6 +182,9 @@ export function createPlayer({ anisotropy = 1 } = {}) {
         texture.colorSpace = SRGBColorSpace
         texture.anisotropy = anisotropy
         material.map = texture
+        // The lift is coloured by his own texture, so it brightens him rather
+        // than washing him towards grey.
+        material.emissiveMap = texture
         material.needsUpdate = true
         fitToTexture(texture.image)
         sprite.visible = true
@@ -159,11 +230,10 @@ export function createPlayer({ anisotropy = 1 } = {}) {
 
     /**
      * @param dt      seconds since the last frame, already clamped
-     * @param camera  billboarding follows it, and it follows us
      * @param input   from core/input.js
      * @param collider from scene/collision.js, or null for free movement
      */
-    update(dt, camera, input, collider) {
+    update(dt, input, collider) {
       input.read(wish)
       const walking = wish.x !== 0 || wish.y !== 0
 
@@ -217,9 +287,11 @@ export function createPlayer({ anisotropy = 1 } = {}) {
       // wide and low in the dip. Roughly volume-preserving, which is what
       // stops it reading as the sprite simply scaling.
       const squash = bob * PLAYER.bobSquash
-      sprite.scale.set(baseWidth * facing * (1 - squash), height * (1 + squash), 1)
+      sprite.scale.set(baseWidth * facing * (1 - squash), cardHeight * (1 + squash), 1)
 
-      sprite.quaternion.copy(camera.quaternion)
+      // Live from the panel. Both are cheap when nothing has changed.
+      material.emissive.set(light.player.lift)
+      reshape()
     },
   }
 }

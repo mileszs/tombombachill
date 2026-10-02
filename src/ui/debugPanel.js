@@ -128,6 +128,12 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedColor(ground, surface.ground, 'rootShade').name('trunk contact')
   bakedNum(ground, surface.ground, 'rootShadeStrength', 0, 1, 0.01).name('contact amount')
 
+  // ---- Player lighting: live, read every frame by scene/player.js -----
+  const player = gui.addFolder('Player light')
+  player.add(light.player, 'roundnessDeg', 0, 90, 1).name('roundness (°)')
+  player.add(light.player, 'skyward', 0, 1.5, 0.01).name('skyward')
+  player.addColor(light.player, 'lift').name('shade floor')
+
   // ---- Occlusion: live, read fresh every frame -----------------------
   // Worth having a panel for: none of these had ever been seen until the fade
   // was fixed, so they are the least-tuned numbers in the project.
@@ -196,7 +202,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [occ, wind, grass, trees, clutter, props]) folder.close()
+  for (const folder of [player, occ, wind, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
     if (!TOGGLE_KEYS.has(event.key)) return
