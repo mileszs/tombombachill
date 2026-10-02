@@ -2,16 +2,18 @@
 <meta charset="utf-8" />
 <title>player sprite</title>
 <!--
-  Generates public/sprites/player.png.
+  Generates public/sprites/player.png (the back view) and
+  public/sprites/player-front.png (the front view).
 
   Open this file in a browser. No build step, no dependencies, nothing to
   remember — that is the whole point of it being a single HTML file. Pick an
-  outfit and a tone, click its download link, and drop the file into
+  outfit and a tone, click both of its download links, and drop the files into
   public/sprites/.
 
   The sprite is a placeholder standing in for real art: a small barefoot
-  halfling seen from behind. No facial features are ever drawn, so there is no
-  face to read at any zoom.
+  halfling, seen from behind as he walks away and from the front as he walks
+  towards you. No facial features are ever drawn, front or back, so there is
+  no face to read at any zoom.
 
   He is about 65 px tall in the game — one sixth of this canvas — so anything
   narrower than ~6 px here is gone on screen. The halfling has to read from the
@@ -86,7 +88,14 @@
   /** Which one ships. */
   const CURRENT = { outfit: 'waistcoat', tone: 'warm' }
 
-  function drawPlayer(ctx, tone, outfit) {
+  /** Each view, and the file it is saved as in public/sprites/. */
+  const VIEWS = [
+    { id: 'back', file: 'player.png' },
+    { id: 'front', file: 'player-front.png' },
+  ]
+
+  function drawPlayer(ctx, tone, outfit, view = 'back') {
+    const front = view === 'front'
     const INK = '#33261a'
     const SKIN = tone.skin, SKIN_S = tone.shade
     const HAIR = tone.hair, HAIR_S = tone.hairDark
@@ -126,19 +135,28 @@
     // ---------- feet: big, bare, splayed ----------
     // From behind and above, splayed feet show their length sideways, which is
     // the only way their size can read in a rear view. Toes point out and away.
+    // From the front they point out and towards you, and all five toes show
+    // along the front edge. Turned well out: a foot pointing at the camera
+    // foreshortens into a lump, and it is the sideways length that reads as big.
     //
     // A smooth outlined oval reads as a shoe. What says *bare* is the bumpy
     // edge at the tip, so toes are drawn first and the foot laid over them:
-    // each toe pokes out past the outline as its own bump.
-    const FOOT = { cx: 60, cy: 358, rx: 33, ry: 15, rot: 0.33 }
+    // each toe pokes out past the outline as its own bump. The tip is at
+    // parametric angle π; negative offsets run towards the inside of the foot,
+    // which is where the big toe goes.
+    const FOOT = front
+      ? { cx: 64, cy: 356, rx: 30, ry: 15, rot: -0.42 }
+      : { cx: 60, cy: 358, rx: 33, ry: 15, rot: 0.33 }
+    const TOES = front
+      ? [[-0.8, 7], [-0.4, 6], [0, 5.5], [0.38, 5], [0.72, 4.5]]
+      : [[-0.55, 6], [-0.2, 7], [0.18, 6.5], [0.52, 5.5]]
     /** A point on the left foot's rotated ellipse, at parametric angle t. */
     const onFoot = (t, grow = 0) => {
       const ex = (FOOT.rx + grow) * Math.cos(t), ey = (FOOT.ry + grow) * Math.sin(t)
       const c = Math.cos(FOOT.rot), sn = Math.sin(FOOT.rot)
       return [FOOT.cx + ex * c - ey * sn, FOOT.cy + ex * sn + ey * c]
     }
-    const toes = [[-0.55, 6], [-0.2, 7], [0.18, 6.5], [0.52, 5.5]]
-      .map(([dt, r]) => [...onFoot(Math.PI + dt, -2), r])
+    const toes = TOES.map(([dt, r]) => [...onFoot(Math.PI + dt, -2), r])
     for (const side of [1, -1]) {
       const flip = ([px, py, r]) => [side === 1 ? px : mirror(px), py, r]
       blobs(SKIN, toes.map(flip), 4)
@@ -160,11 +178,10 @@
     // the ankle, where it can be seen against the skin.
     for (const side of [1, -1]) {
       const at = (px) => (side === 1 ? px : mirror(px))
-      blobs(HAIR, [
-        [at(38), 350, 6],
-        [at(47), 345, 7.5],
-        [at(57), 344, 6],
-      ], 4)
+      const tufts = front
+        ? [[58, 353, 4.5], [66, 350, 5]]
+        : [[38, 350, 6], [47, 345, 7.5], [57, 344, 6]]
+      blobs(HAIR, tufts.map(([px, py, r]) => [at(px), py, r]), 4)
     }
 
     // ---------- breeches to just below the knee, rolled ----------
@@ -207,7 +224,28 @@
     }
     draw(BODY, body)
 
-    if (outfit.waistcoat) {
+    if (outfit.waistcoat && front) {
+      x.save()
+      x.beginPath(); body(); x.closePath(); x.clip()
+      // the shirt showing in the V of the open neck
+      draw(SHIRT, () => { x.moveTo(78, 124); x.lineTo(114, 124); x.lineTo(96, 184) }, 3)
+      // the front edge, closed below the V
+      x.strokeStyle = INK; x.lineWidth = 3
+      x.beginPath(); x.moveTo(96, 184); x.lineTo(96, 244); x.stroke()
+      // pocket welts
+      x.strokeStyle = outfit.waistcoatDark; x.lineWidth = 4
+      for (const [x0, x1] of [[62, 82], [110, 130]]) {
+        x.beginPath(); x.moveTo(x0, 208); x.lineTo(x1, 208); x.stroke()
+      }
+      // buttons
+      x.fillStyle = '#c9a65a'
+      for (const by of [196, 211, 226]) {
+        x.beginPath(); x.arc(101, by, 3.5, 0, Math.PI * 2); x.fill()
+      }
+      x.restore()
+      x.beginPath(); body(); x.closePath()
+      x.lineWidth = 5; x.strokeStyle = INK; x.stroke()
+    } else if (outfit.waistcoat) {
       x.save()
       x.beginPath(); body(); x.closePath(); x.clip()
       // the back seam
@@ -224,32 +262,55 @@
       x.lineWidth = 5; x.strokeStyle = INK; x.stroke()
     }
 
-    // ---------- shirt collar, showing above the body ----------
-    draw(SHIRT, () => {
-      x.moveTo(78, 126); x.quadraticCurveTo(96, 118, 114, 126)
-      x.lineTo(112, 136); x.quadraticCurveTo(96, 131, 80, 136)
-    }, 4)
+    // ---------- shirt collar ----------
+    if (front) {
+      // two points, lying over the top of the V
+      for (const side of [1, -1]) {
+        const at = (px) => (side === 1 ? px : mirror(px))
+        draw(SHIRT, () => { x.moveTo(at(78), 122); x.lineTo(at(95), 128); x.lineTo(at(84), 142) }, 4)
+      }
+      if (!outfit.waistcoat) {
+        x.strokeStyle = SHIRT_S; x.lineWidth = 3.5
+        x.beginPath(); x.moveTo(96, 132); x.lineTo(96, 156); x.stroke()
+      }
+    } else {
+      // showing above the body
+      draw(SHIRT, () => {
+        x.moveTo(78, 126); x.quadraticCurveTo(96, 118, 114, 126)
+        x.lineTo(112, 136); x.quadraticCurveTo(96, 131, 80, 136)
+      }, 4)
+    }
 
     // ---------- neck ----------
     draw(SKIN_S, () => {
       x.moveTo(84, 106); x.lineTo(108, 106); x.lineTo(110, 128); x.lineTo(82, 128)
     }, 0)
 
-    // ---------- head, in three-quarter rear ----------
-    // Everything past the hair is cheek and jaw. No features are ever drawn.
+    // ---------- head ----------
+    // From behind, three-quarter rear: everything past the hair is cheek and
+    // jaw. From the front, the face below the fringe is left bare. No features
+    // are ever drawn.
     draw(SKIN, () => x.ellipse(97, 80, 44, 45, 0, 0, Math.PI * 2))
-    // the ear, with a slight point, tipped up and back
-    draw(SKIN, () => {
-      x.moveTo(134, 74)
-      x.quadraticCurveTo(144, 62, 149, 62)
-      x.quadraticCurveTo(151, 80, 144, 98)
-      x.quadraticCurveTo(136, 100, 134, 92)
+    // the ears, with a slight point, tipped up and back — one from behind,
+    // both from the front
+    const ear = (at) => draw(SKIN, () => {
+      x.moveTo(at(134), 74)
+      x.quadraticCurveTo(at(144), 62, at(149), 62)
+      x.quadraticCurveTo(at(151), 80, at(144), 98)
+      x.quadraticCurveTo(at(136), 100, at(134), 92)
     }, 4)
+    ear((px) => px)
+    if (front) ear((px) => mirror(px) + 2)
 
     // ---------- hair: a curly mop, built from curls ----------
-    // Covers the back and crown, stops short of the right cheek and the ear so
-    // the head still reads as turned a little.
-    const curls = [
+    // From behind it covers the back and crown, and stops short of the right
+    // cheek and the ear so the head still reads as turned a little. From the
+    // front it is the crown and a fringe, stopping above the ear tips so the
+    // points still show.
+    const curls = front ? [
+      [64, 50, 16], [82, 38, 17], [102, 34, 17], [120, 40, 16], [133, 52, 13],
+      [60, 64, 12], [77, 58, 13], [95, 55, 13], [113, 57, 13], [129, 64, 12],
+    ] : [
       [64, 54, 17], [83, 41, 18], [103, 36, 18], [122, 43, 16], [133, 56, 11],
       [54, 74, 16], [75, 66, 18], [98, 60, 19], [119, 63, 16],
       [70, 86, 17], [90, 82, 21], [112, 80, 17],
@@ -281,34 +342,42 @@
       const fig = document.createElement('figure')
       if (current) fig.className = 'current'
 
-      const canvas = document.createElement('canvas')
-      canvas.width = W; canvas.height = H
-      canvas.className = 'large'
-      canvas.dataset.outfit = outfit.id
-      canvas.dataset.tone = tone.id
-      drawPlayer(canvas.getContext('2d'), tone, outfit)
-
-      // The same sprite at the size it is actually seen. This is the one to judge.
-      const small = document.createElement('canvas')
-      const smallW = Math.round((IN_GAME_HEIGHT * W) / H)
-      small.width = smallW * devicePixelRatio
-      small.height = IN_GAME_HEIGHT * devicePixelRatio
-      small.style.width = `${smallW}px`
-      small.style.height = `${IN_GAME_HEIGHT}px`
-      const sctx = small.getContext('2d')
-      sctx.imageSmoothingQuality = 'high'
-      sctx.drawImage(canvas, 0, 0, small.width, small.height)
-
       const pair = document.createElement('div')
       pair.className = 'pair'
-      pair.append(canvas, small)
-
       const cap = document.createElement('figcaption')
-      const link = document.createElement('a')
-      link.textContent = tone.id + (current ? ' (current)' : '')
-      link.download = 'player.png'
-      link.href = canvas.toDataURL('image/png')
-      cap.append(link, document.createElement('br'), document.createTextNode(tone.skin))
+      cap.append(tone.id + (current ? ' (current)' : ''), document.createElement('br'))
+
+      const larges = [], smalls = []
+      for (const view of VIEWS) {
+        const canvas = document.createElement('canvas')
+        canvas.width = W; canvas.height = H
+        canvas.className = 'large'
+        canvas.dataset.outfit = outfit.id
+        canvas.dataset.tone = tone.id
+        canvas.dataset.view = view.id
+        drawPlayer(canvas.getContext('2d'), tone, outfit, view.id)
+        larges.push(canvas)
+
+        // The same sprite at the size it is actually seen. This is the one to judge.
+        const small = document.createElement('canvas')
+        const smallW = Math.round((IN_GAME_HEIGHT * W) / H)
+        small.width = smallW * devicePixelRatio
+        small.height = IN_GAME_HEIGHT * devicePixelRatio
+        small.style.width = `${smallW}px`
+        small.style.height = `${IN_GAME_HEIGHT}px`
+        const sctx = small.getContext('2d')
+        sctx.imageSmoothingQuality = 'high'
+        sctx.drawImage(canvas, 0, 0, small.width, small.height)
+        smalls.push(small)
+
+        const link = document.createElement('a')
+        link.textContent = view.id
+        link.download = view.file
+        link.href = canvas.toDataURL('image/png')
+        cap.append(link, ' ')
+      }
+      pair.append(...larges, ...smalls)
+      cap.append(document.createElement('br'), tone.skin)
       fig.append(pair, cap)
       row.append(fig)
     }

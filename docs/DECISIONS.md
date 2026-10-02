@@ -432,6 +432,15 @@ shading that holds either way round is painted: under the hair, cuff folds.
 (shipping, chosen 2026-10) and the plain tunic CLAUDE.md used to describe. Brick rather than the
 obvious green, because green vanishes against the forest floor.
 
+**Two views, chosen by walking direction.** `player.png` is the back,
+`player-front.png` the front; `scene/player.js` loads both and swaps the
+material's map (and emissive map, which carries the lift) when he walks up or
+down the screen. Pure sideways travel keeps the current view, so letting go of
+a diagonal doesn't spin him round. The front is optional: if it fails to load
+he keeps his back to you and the console says why. The front feet are turned
+much further out than the back ones, because a foot pointing at the camera
+foreshortens into a lump and only its sideways length reads as big.
+
 Note this colour deliberately does *not* live in `palette.js`. The sprite is a
 baked PNG, so nothing in the running game can tint parts of it — palette.js is
 for values three consumes at runtime, and putting a dead one there would be a
@@ -604,6 +613,15 @@ serves it as `palette.js?t=…`, and a bare `import('/src/palette.js')` gets a
 second, disconnected copy that silently changes nothing. Find it with
 `performance.getEntriesByType('resource')`. Wind moves the whole frame, so
 pixel-diffing two screenshots is noise; measure fixed crops instead.
+
+**Run the harness on an arm64 Node.** This machine's global Node 21 is an
+x86_64 build, and Chrome spawned from it runs under Rosetta. That works some of
+the time and otherwise hangs after the page's first scripts run, with nothing
+in the console but Chrome's own "use of Rosetta … is neither tested nor
+maintained" line. It looks exactly like an infinite loop in the game; the
+committed code hangs identically, which is how to tell. Use the project's Node
+24 explicitly (`~/.asdf/installs/nodejs/24.21.0/bin/node`): the shim alone did
+not take, from a directory without `.tool-versions`.
 
 ---
 

@@ -33,8 +33,13 @@ import { makeBlobShadowTexture } from '../util/textures.js'
  * touched.
  */
 
-/** Served from public/, so this is the URL path, not a filesystem path. */
-const SPRITE_URL = '/sprites/player.png'
+/**
+ * Served from public/, so these are URL paths, not filesystem paths. Both come
+ * from tools/player-sprite.html and share one size. The back view is the one
+ * he can't do without; the front is shown while he walks towards the camera,
+ * and if it is missing he simply keeps his back to you.
+ */
+const SPRITE_URL = { back: '/sprites/player.png', front: '/sprites/player-front.png' }
 
 /** Fallback aspect used until the image loads and reports its real one. */
 const ASSUMED_ASPECT = 0.5
@@ -173,37 +178,58 @@ export function createPlayer({ anisotropy = 1 } = {}) {
     blobRadius = baseWidth * 1.25 * 0.5
   }
 
+  /** Loaded views, keyed 'back' / 'front'. Filled in as the files arrive. */
+  const textures = {}
+
+  const loadView = (view) =>
+    new Promise((resolve) => {
+      new TextureLoader().load(
+        SPRITE_URL[view],
+        (texture) => {
+          texture.colorSpace = SRGBColorSpace
+          texture.anisotropy = anisotropy
+          textures[view] = texture
+          resolve(texture)
+        },
+        undefined,
+        () => resolve(null),
+      )
+    })
+
+  /**
+   * Point the material at one view. The lift is coloured by his own texture,
+   * so it brightens him rather than washing him towards grey — which means the
+   * emissive map has to swap along with the colour map.
+   */
+  const showView = (view) => {
+    const texture = textures[view] ?? textures.back
+    if (!texture || material.map === texture) return
+    const first = !material.map
+    material.map = texture
+    material.emissiveMap = texture
+    // Only the first assignment changes the shader (no map → a map); swapping
+    // one texture for another afterwards is a uniform change and costs nothing.
+    if (first) material.needsUpdate = true
+  }
+
   // Resolves either way — the caller waits on this before showing the scene,
   // so it must never be left hanging on a missing file.
-  const ready = new Promise((resolve) => {
-    new TextureLoader().load(
-      SPRITE_URL,
-      (texture) => {
-        texture.colorSpace = SRGBColorSpace
-        texture.anisotropy = anisotropy
-        material.map = texture
-        // The lift is coloured by his own texture, so it brightens him rather
-        // than washing him towards grey.
-        material.emissiveMap = texture
-        material.needsUpdate = true
-        fitToTexture(texture.image)
-        sprite.visible = true
-        resolve()
-      },
-      undefined,
-      () => {
-        // Nothing renders without it, so say so plainly rather than leaving an
-        // invisible player and no explanation.
-        console.error(
-          `[player] could not load ${SPRITE_URL} — put the sprite at ` +
-            `public${SPRITE_URL} (a back view of the child, transparent background).`,
-        )
-        group.visible = false
-        resolve()
-      },
-    )
+  const ready = Promise.all([loadView('back'), loadView('front')]).then(([back, front]) => {
+    if (!back) {
+      // Nothing renders without it, so say so plainly rather than leaving an
+      // invisible player and no explanation.
+      console.error(
+        `[player] could not load ${SPRITE_URL.back} — put the sprite at ` +
+          `public${SPRITE_URL.back} (a back view, transparent background).`,
+      )
+      group.visible = false
+      return
+    }
+    if (!front) console.warn(`[player] no ${SPRITE_URL.front}; he will only ever be seen from behind.`)
+    showView('back')
+    fitToTexture(back.image)
+    sprite.visible = true
   })
-
 
   // --- walk state -------------------------------------------------------
   const position = { x, z }
@@ -215,6 +241,13 @@ export function createPlayer({ anisotropy = 1 } = {}) {
   let gait = 0
   /** -1 or 1. Which way the sprite is mirrored. */
   let facing = 1
+  /**
+   * 'back' walking away up the screen, 'front' walking towards the camera.
+   * Pure sideways travel keeps whichever he had, so he doesn't spin round on
+   * the spot when you let go of a diagonal. He starts with his back to you,
+   * looking into the forest.
+   */
+  let view = 'back'
 
   // Screen-space basis on the ground. The camera is rotated off the world axis,
   // so "up on the keyboard" is not world -Z; pressing up has to send the player
@@ -258,6 +291,9 @@ export function createPlayer({ anisotropy = 1 } = {}) {
         // Flip on screen-space horizontal travel, not world X — otherwise the
         // sprite faces the wrong way for two of the four cardinals.
         if (Math.abs(wish.x) > 0.01) facing = wish.x > 0 ? 1 : -1
+        if (wish.y > 0.01) view = 'back'
+        else if (wish.y < -0.01) view = 'front'
+        showView(view)
       }
 
       // Ease the gait so the bob does not snap on and off with the key.
