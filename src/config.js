@@ -308,3 +308,48 @@ export const PROPS = {
    */
   boomboxScale: 1.4,
 }
+
+/**
+ * The audio engine. Phase 2 has exactly one source, and it is the boombox —
+ * the one sound in the forest that is allowed to come from something you can
+ * see. Phase 3 moves sources out into zones.json; until then this is the list.
+ *
+ * Distances are metres on the ground, measured from the player. The camera at
+ * walkViewSize shows roughly 16 m either side of him, so `outerRadius` sits
+ * well past the edge of the frame: you should hear the boombox before you can
+ * see it, and keep hearing it after it has gone.
+ */
+export const AUDIO = {
+  /** Everything passes through this. 1 is the level the file was bounced at. */
+  masterGain: 0.9,
+  /**
+   * How long the forest takes to come up after you step in, in seconds.
+   * Slowness is a material — this is a fade, not a load time.
+   */
+  fadeInSeconds: 3,
+  /**
+   * Time constant for gain and pan changes as you walk, in seconds. Without
+   * smoothing, a per-frame gain change is audible as a faint zipper.
+   */
+  smoothing: 0.12,
+  /**
+   * How far left or right of him, across the screen, a source has to be to
+   * reach `maxPan`. Measured along the camera's horizontal, not the world's,
+   * because left on screen should be left in the ears.
+   */
+  panWidth: 12,
+  /** Never hard-pan. A source fully in one ear sounds like a broken headphone. */
+  maxPan: 0.6,
+  sources: [
+    {
+      id: 'boombox',
+      file: '/audio/tom-bombachill-all-tracks.wav',
+      position: PROPS.boomboxPosition,
+      gain: 1,
+      /** Full volume inside this — roughly arm's reach of the stump. */
+      innerRadius: 2.5,
+      /** Silent beyond this. */
+      outerRadius: 28,
+    },
+  ],
+}

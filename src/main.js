@@ -7,6 +7,7 @@ import { createOverlay } from './ui/overlay.js'
 import { createInput } from './core/input.js'
 import { createDebugPanel } from './ui/debugPanel.js'
 import { createLoader, nextPaint } from './ui/loader.js'
+import { createAudioEngine } from './audio/engine.js'
 
 const container = document.querySelector('#scene')
 
@@ -15,6 +16,8 @@ const renderer = createRenderer(container)
 const rig = createCameraRig(container.clientWidth / Math.max(container.clientHeight, 1))
 const { camera } = rig
 const input = createInput()
+// Before the world build, so the stems decode while the forest is assembled.
+const audio = createAudioEngine()
 
 // Hand the browser a frame before we block it. Everything below this line is
 // synchronous and takes the best part of a second, so without this yield the
@@ -30,7 +33,9 @@ const overlay = createOverlay({
     // The front door. Drops the title and pushes the camera in from the wide
     // establishing shot to the walking one — at 30 the boombox is seven pixels
     // tall, and the game wants to reveal less than the ears do.
-    // TODO: this is also where the AudioContext gets unlocked (Phase 2).
+    // It is also the gesture that unlocks the audio, which is why the forest
+    // only starts playing once you step into it.
+    audio.start()
     overlay.dismiss()
     rig.setViewSize(CAMERA.walkViewSize)
   },
@@ -79,5 +84,6 @@ renderer.setAnimationLoop((time) => {
   const dt = Math.min((time - previous) / 1000, MAX_FRAME)
   previous = time
   world.update(dt, rig, input)
+  audio.update(world.player.position, camera)
   renderer.render(world.scene, camera)
 })

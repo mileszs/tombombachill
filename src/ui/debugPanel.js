@@ -2,7 +2,7 @@ import GUI from 'lil-gui'
 import { light, fog, surface } from '../palette.js'
 import { TONE_MAPPINGS, applyToneMapping } from '../core/renderer.js'
 import { applyLighting } from '../scene/lighting.js'
-import { CAMERA, OCCLUSION, WIND } from '../config.js'
+import { AUDIO, CAMERA, OCCLUSION, WIND } from '../config.js'
 import { applyWind } from '../scene/wind.js'
 
 /**
@@ -145,6 +145,19 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   wind.add(WIND, 'cardAmplitude', 0, 0.2, 0.002).name('undergrowth sway (m)').onChange(rewind)
   wind.add(WIND, 'cardSpeed', 0, 4, 0.01).name('undergrowth speed').onChange(rewind)
   wind.add(WIND, 'waveNumber', 0, 0.6, 0.005).name('wave / metre').onChange(rewind)
+
+  // ---- Audio: live, read fresh every frame by audio/engine.js --------
+  // These want tuning by ear while walking, not by reading numbers.
+  const sound = gui.addFolder('Audio')
+  sound.add(AUDIO, 'masterGain', 0, 1.5, 0.01).name('master')
+  sound.add(AUDIO, 'panWidth', 2, 40, 0.5).name('pan width (m)')
+  sound.add(AUDIO, 'maxPan', 0, 1, 0.01).name('max pan')
+  for (const source of AUDIO.sources) {
+    const folder = sound.addFolder(source.id)
+    folder.add(source, 'gain', 0, 1.5, 0.01)
+    folder.add(source, 'innerRadius', 0, 20, 0.1).name('full volume within (m)')
+    folder.add(source, 'outerRadius', 1, 80, 0.5).name('silent beyond (m)')
+  }
 
   const grass = gui.addFolder('Grass texture — rebuilds')
   bakedColor(grass, surface.grass, 'base')

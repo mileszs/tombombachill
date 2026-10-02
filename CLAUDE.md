@@ -147,7 +147,8 @@ instead of filling clearings. `standDensity` is exported for placing sources.
 
 ## Audio architecture — non-negotiable
 
-Not built yet (Phase 2+), but design around it now:
+Built in Phase 2, in `src/audio/engine.js`, tuned by the `AUDIO` block in
+`config.js` and its folder in the debug panel. Hold every later phase to it:
 
 > Every stem loads as an `AudioBuffer`, starts **once**, at the same moment,
 > against a single shared `AudioContext` clock, with `loop = true`, and runs
@@ -175,8 +176,10 @@ sends rather than sources.
   bounded edge. Plus an occluder fade, which turned out to be necessary — see
   art direction — and, after a visual audit in 2026-09, wind, contact shading
   baked into the ground, and a raking key.
-- **Phase 2 — One sound.** Next. Audio engine, one source, distance gain.
-- **Phase 3 — The mixing board.** All stems, `zones.json`, the four-source sweet
+- **Phase 2 — One sound.** Done. Audio engine, one source (a full-mix
+  placeholder on the boombox, not a real stem), squared distance falloff,
+  screen-relative pan, fade-in on entering.
+- **Phase 3 — The mixing board.** Next. All stems, `zones.json`, the four-source sweet
   spot that is unmarked and findable only by accident.
 - **Phase 4** — zone character. **Phase 5** — feel + the `sit` state machine
   (must emit events; later phases depend on it). **Phase 6** — contributor

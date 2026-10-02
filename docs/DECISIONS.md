@@ -531,6 +531,48 @@ changed nothing. It was the only hardcoded hex outside `palette.js` in `src/`.
 
 ---
 
+## Phase 2 — one sound
+
+### Plain Web Audio, not Tone.js
+
+Tone.js is in `package.json` and unused. Everything the mixing board needs —
+looped `AudioBuffer`s started on one clock, a gain and a pan per source — is
+about a dozen Web Audio calls, and plain Web Audio is the version that will
+still read obviously after nine months away. Reach for Tone only if a later
+phase needs its scheduling or effects, not for this.
+
+### The context is created at boot, and resumed in the click
+
+Creating the `AudioContext` early lets the stems fetch and decode while the
+world builds, so stepping in doesn't wait on a 14 MB download. It starts
+suspended, and Chrome logs a warning saying so; that warning is expected.
+`resume()` must be reached *synchronously* inside the click handler, so in
+`engine.start()` it comes before any `await`. If the files are still decoding
+when you click, the forest comes up a moment late — every source still starts
+on the same scheduled tick, because they are all `start(at)` with one `at`.
+
+### Stems must be WAV (or FLAC), never MP3 or AAC
+
+Lossy encoders pad the start and end with silence that `decodeAudioData` does
+not reliably strip, which puts an audible gap in every loop. Bounce from Logic
+with the cycle region on exact bar lines, Include Audio Tail off, Normalize off,
+and the 2nd cycle pass (or a hand-made second copy) so reverb tails wrap. The
+first file is exactly 48.000 s at 48 kHz, which is how you can tell it worked.
+
+Cloudflare's static assets cap each file at 25 MiB. A minute of 24-bit stereo
+WAV is ~17 MB, so long stems will need FLAC (lossless, loops cleanly, plays in
+every current browser) or mono.
+
+### Falloff is squared, and the outer radius is past the frame
+
+Linear falloff makes most of the approach loud and the last few metres flat.
+`(1 − t)²` keeps the far field quiet and makes the final steps towards a source
+still pay off. The camera at `walkViewSize` shows ~16 m either side of the
+player, and `outerRadius` is 28: you hear the boombox before you see it, which
+is the whole design.
+
+---
+
 ## Deployment
 
 ### Workers static assets, not Pages
