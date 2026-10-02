@@ -413,6 +413,25 @@ constants — hair that reads against a light tone disappears against a deep one
 lands, and the drawing routine already takes a tone, so the game-side work is
 picking one and reloading the texture rather than rewriting the sprite.
 
+**He is drawn to read at 65 px, not at 384.** On screen he is a sixth of the
+canvas, so anything under ~6 px is gone. The halfling has to come from the
+silhouette: big splayed feet, the bumpy outline of curly hair, a stout barrel of
+a body. Two drawing tricks carry it. `blobs()` builds a shape from overlapping
+circles and outlines only the union (stroke every circle fat, then fill them
+all), which gives hair and toes a bumpy edge. And the toes are drawn *under*
+the foot, so each one pokes past the outline: a smooth outlined oval reads as a
+shoe, and the bumps are what say barefoot. The page shows every sprite at its
+in-game size beside the large one; judge by that.
+
+**No left/right shading is painted any more.** The old tunic had a darker panel
+painted on its right. Once the game lit him, that paint fought the sun (which
+comes from screen-right) and swapped sides every time the sprite mirrored. Only
+shading that holds either way round is painted: under the hair, cuff folds.
+
+**Outfits are a switch.** `OUTFITS` has a brick waistcoat over the shirt
+(shipping, chosen 2026-10) and the plain tunic CLAUDE.md used to describe. Brick rather than the
+obvious green, because green vanishes against the forest floor.
+
 Note this colour deliberately does *not* live in `palette.js`. The sprite is a
 baked PNG, so nothing in the running game can tint parts of it — palette.js is
 for values three consumes at runtime, and putting a dead one there would be a

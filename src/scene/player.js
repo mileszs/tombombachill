@@ -15,7 +15,7 @@ import { terrainHeight } from '../util/terrain.js'
 import { makeBlobShadowTexture } from '../util/textures.js'
 
 /**
- * The player: a barefoot child in a plain tunic and rolled trousers, drawn
+ * The player: a small barefoot halfling in a waistcoat and rolled breeches, drawn
  * from behind, as an upright card turned to face the camera's bearing.
  *
  * Upright, not leaning back at the camera's pitch. A fully camera-facing quad

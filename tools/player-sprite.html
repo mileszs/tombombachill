@@ -5,12 +5,25 @@
   Generates public/sprites/player.png.
 
   Open this file in a browser. No build step, no dependencies, nothing to
-  remember — that is the whole point of it being a single HTML file. Pick a
-  tone, click its download link, and drop the file into public/sprites/.
+  remember — that is the whole point of it being a single HTML file. Pick an
+  outfit and a tone, click its download link, and drop the file into
+  public/sprites/.
 
   The sprite is a placeholder standing in for real art: a small barefoot
-  halfling in a sleeveless tunic and rolled trousers, seen from behind. No
-  facial features are ever drawn, so there is no face to read at any zoom.
+  halfling seen from behind. No facial features are ever drawn, so there is no
+  face to read at any zoom.
+
+  He is about 65 px tall in the game — one sixth of this canvas — so anything
+  narrower than ~6 px here is gone on screen. The halfling has to read from the
+  silhouette: the big splayed feet, the curly outline of the hair, the stout
+  barrel of the body. Detail inside those shapes is a bonus, never the signal.
+  The small previews beside each sprite are drawn at that real size; trust them
+  over the large ones.
+
+  No left/right shading is painted in. The game lights him (curved normals, see
+  scene/player.js), and baked shading would fight the sun — and swap sides every
+  time the sprite is mirrored. Only top-down shading that holds whichever way
+  he faces is painted: the shadow under the hair, the darker cuff folds.
 
   When a skin-tone chooser lands in the game, TONES below is the list it should
   offer, and the drawing routine already takes a tone rather than constants.
@@ -24,19 +37,25 @@
     font: 14px/1.5 system-ui, sans-serif;
   }
   h1 { font-size: 1rem; font-weight: 600; margin: 0 0 1.5rem; }
+  h2 { font-size: 0.9rem; font-weight: 600; margin: 2rem 0 1rem; opacity: 0.85; }
   .row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
   figure { margin: 0; text-align: center; }
+  .pair { display: flex; align-items: flex-end; gap: 0.6rem; }
   /* shown against the forest floor, which is what it has to read against */
-  canvas { background: #4a5a34; border-radius: 4px; width: 96px; height: 192px; }
+  canvas { background: #4a5a34; border-radius: 4px; }
+  canvas.large { width: 96px; height: 192px; }
   figcaption { margin-top: 0.5rem; font-size: 12px; opacity: 0.75; }
   a { color: #9dc4ff; }
-  .current { outline: 2px solid #e6dfc6; outline-offset: 4px; }
+  .current canvas.large { outline: 2px solid #e6dfc6; outline-offset: 4px; }
 </style>
-<h1>player sprite &mdash; pick a tone, download, save as <code>public/sprites/player.png</code></h1>
-<div class="row" id="row"></div>
+<h1>player sprite &mdash; pick one, download, save as <code>public/sprites/player.png</code></h1>
+<div id="rows"></div>
 
 <script>
   const W = 192, H = 384
+
+  /** Height he is drawn at in the game, in CSS pixels, for the small previews. */
+  const IN_GAME_HEIGHT = 64
 
   /**
    * Skin, its shading, and hair, kept together: hair that reads against a light
@@ -51,15 +70,29 @@
     { id: 'darkest',skin: '#5f3a24', shade: '#4a2c1a', hair: '#2b180d', hairDark: '#1a0e06' },
   ]
 
-  /** Which one ships. */
-  const CURRENT = 'warm'
+  /**
+   * What he wears over the shirt. `waistcoat: null` draws the body in the shirt
+   * colour instead — the plain tunic CLAUDE.md describes.
+   *
+   * Brick rather than green: a green waistcoat is the obvious choice and it
+   * vanishes against the forest floor. Brick is the floor's complement, and it
+   * sits inside the golden-hour palette rather than fighting it.
+   */
+  const OUTFITS = [
+    { id: 'waistcoat', waistcoat: '#8e4a2e', waistcoatDark: '#6a3420' },
+    { id: 'tunic', waistcoat: null, waistcoatDark: null },
+  ]
 
-  function drawPlayer(ctx, tone) {
+  /** Which one ships. */
+  const CURRENT = { outfit: 'waistcoat', tone: 'warm' }
+
+  function drawPlayer(ctx, tone, outfit) {
     const INK = '#33261a'
     const SKIN = tone.skin, SKIN_S = tone.shade
     const HAIR = tone.hair, HAIR_S = tone.hairDark
-    const TUNIC = '#e6dfc6', TUNIC_S = '#c9c1a4'
-    const TROUS = '#8b6b43', CUFF = '#a98a5e'
+    const SHIRT = '#e6dfc6', SHIRT_S = '#c9c1a4'
+    const BREECH = '#7a5c3a', CUFF = '#9a7b52'
+    const BODY = outfit.waistcoat ?? SHIRT
     const x = ctx
 
     x.clearRect(0, 0, W, H)
@@ -70,107 +103,214 @@
       if (lw) { x.lineWidth = lw; x.strokeStyle = INK; x.stroke() }
     }
 
-    // ---------- bare feet ----------
-    draw(SKIN, () => x.ellipse(70, 364, 19, 12, -0.10, 0, Math.PI * 2))
-    draw(SKIN, () => x.ellipse(123, 364, 19, 12, 0.10, 0, Math.PI * 2))
+    /**
+     * A shape built from overlapping circles, outlined only where it meets the
+     * outside. Stroking every circle fat and *then* filling them all paints over
+     * the interior lines, leaving one bumpy outline round the union. That bumpy
+     * edge is what makes hair read as curly, and tufts read as tufts, at 65 px.
+     */
+    const blobs = (fill, circles, lw = 5) => {
+      x.fillStyle = INK
+      for (const [cx, cy, r] of circles) {
+        x.beginPath(); x.arc(cx, cy, r + lw / 2, 0, Math.PI * 2); x.fill()
+      }
+      x.fillStyle = fill
+      for (const [cx, cy, r] of circles) {
+        x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill()
+      }
+    }
 
-    // ---------- bare lower legs ----------
-    for (const lx of [72, 121]) {
+    /** Mirror an x coordinate across the body's centre line. */
+    const mirror = (px) => W - px
+
+    // ---------- feet: big, bare, splayed ----------
+    // From behind and above, splayed feet show their length sideways, which is
+    // the only way their size can read in a rear view. Toes point out and away.
+    //
+    // A smooth outlined oval reads as a shoe. What says *bare* is the bumpy
+    // edge at the tip, so toes are drawn first and the foot laid over them:
+    // each toe pokes out past the outline as its own bump.
+    const FOOT = { cx: 60, cy: 358, rx: 33, ry: 15, rot: 0.33 }
+    /** A point on the left foot's rotated ellipse, at parametric angle t. */
+    const onFoot = (t, grow = 0) => {
+      const ex = (FOOT.rx + grow) * Math.cos(t), ey = (FOOT.ry + grow) * Math.sin(t)
+      const c = Math.cos(FOOT.rot), sn = Math.sin(FOOT.rot)
+      return [FOOT.cx + ex * c - ey * sn, FOOT.cy + ex * sn + ey * c]
+    }
+    const toes = [[-0.55, 6], [-0.2, 7], [0.18, 6.5], [0.52, 5.5]]
+      .map(([dt, r]) => [...onFoot(Math.PI + dt, -2), r])
+    for (const side of [1, -1]) {
+      const flip = ([px, py, r]) => [side === 1 ? px : mirror(px), py, r]
+      blobs(SKIN, toes.map(flip), 4)
+      draw(SKIN, () =>
+        x.ellipse(side === 1 ? FOOT.cx : mirror(FOOT.cx), FOOT.cy, FOOT.rx, FOOT.ry, side * FOOT.rot, 0, Math.PI * 2),
+      )
+    }
+
+    // ---------- bare lower legs: short and sturdy ----------
+    for (const lx of [72, mirror(72)]) {
       draw(SKIN, () => {
-        x.moveTo(lx - 12, 296); x.quadraticCurveTo(lx - 13, 330, lx - 11, 356)
-        x.lineTo(lx + 11, 356); x.quadraticCurveTo(lx + 13, 330, lx + 12, 296)
+        x.moveTo(lx - 13, 300); x.quadraticCurveTo(lx - 15, 326, lx - 11, 350)
+        x.lineTo(lx + 11, 350); x.quadraticCurveTo(lx + 15, 326, lx + 13, 300)
       })
     }
 
-    // ---------- trousers, rolled to mid-calf ----------
-    draw(TROUS, () => {
-      x.moveTo(48, 226); x.lineTo(145, 226)
-      x.lineTo(140, 292); x.lineTo(107, 292)
-      x.lineTo(96, 258); x.lineTo(86, 292)
-      x.lineTo(53, 292)
+    // ---------- hair on top of the feet ----------
+    // After the legs, or the legs cover it. Sits on the instep, outboard of
+    // the ankle, where it can be seen against the skin.
+    for (const side of [1, -1]) {
+      const at = (px) => (side === 1 ? px : mirror(px))
+      blobs(HAIR, [
+        [at(38), 350, 6],
+        [at(47), 345, 7.5],
+        [at(57), 344, 6],
+      ], 4)
+    }
+
+    // ---------- breeches to just below the knee, rolled ----------
+    draw(BREECH, () => {
+      x.moveTo(46, 222); x.lineTo(146, 222)
+      x.lineTo(143, 298); x.lineTo(108, 298)
+      x.lineTo(96, 262); x.lineTo(84, 298)
+      x.lineTo(49, 298)
     })
-    for (const lx of [72, 121]) {
+    for (const lx of [72, mirror(72)]) {
       draw(CUFF, () => {
-        x.moveTo(lx - 21, 280); x.lineTo(lx + 21, 280)
-        x.lineTo(lx + 19, 302); x.lineTo(lx - 19, 302)
+        x.moveTo(lx - 23, 288); x.lineTo(lx + 23, 288)
+        x.lineTo(lx + 21, 308); x.lineTo(lx - 21, 308)
       }, 4)
     }
 
-    // ---------- bare arms: one tapered shape per side, hand included ----------
-    const arm = (sx, dir) => draw(SKIN, () => {
-      x.moveTo(sx - dir * 10, 152)
-      x.quadraticCurveTo(sx + dir * 12, 190, sx + dir * 14, 228)
-      x.quadraticCurveTo(sx + dir * 15, 250, sx + dir * 4, 251)
-      x.quadraticCurveTo(sx - dir * 8, 250, sx - dir * 7, 230)
-      x.quadraticCurveTo(sx - dir * 6, 190, sx - dir * 10, 152)
-    })
-    arm(56, -1)
-    arm(137, 1)
-
-    // ---------- sleeveless tunic ----------
-    draw(TUNIC, () => {
-      x.moveTo(62, 146)
-      x.quadraticCurveTo(97, 133, 133, 146)
-      x.quadraticCurveTo(139, 190, 137, 236)
-      x.quadraticCurveTo(97, 246, 58, 236)
-      x.quadraticCurveTo(56, 190, 62, 146)
-    })
-    draw(TUNIC_S, () => {
-      x.moveTo(120, 141); x.quadraticCurveTo(139, 190, 137, 236)
-      x.quadraticCurveTo(126, 241, 116, 242); x.quadraticCurveTo(120, 190, 120, 141)
-    }, 0)
-    x.strokeStyle = TUNIC_S; x.lineWidth = 3.5
-    for (const [ax, dir] of [[66, -1], [129, 1]]) {
-      x.beginPath()
-      x.moveTo(ax + dir * 3, 146)
-      x.quadraticCurveTo(ax - dir * 5, 166, ax + dir * 2, 186)
-      x.stroke()
+    // ---------- arms: puffed shirt sleeve, rolled cuff, bare forearm ----------
+    const arm = (sx, dir) => {
+      // forearm and hand first, so the cuff sits over the join
+      draw(SKIN, () => {
+        x.moveTo(sx - 9, 190)
+        x.quadraticCurveTo(sx - 11, 222, sx - 8, 240)
+        x.lineTo(sx + 8, 240)
+        x.quadraticCurveTo(sx + 11, 222, sx + 9, 190)
+      })
+      draw(SKIN, () => x.ellipse(sx + dir * 1, 244, 11, 12, 0, 0, Math.PI * 2))
+      draw(SHIRT, () => x.ellipse(sx + dir * 2, 164, 17, 30, dir * 0.12, 0, Math.PI * 2))
+      draw(SHIRT_S, () => x.ellipse(sx, 193, 15, 8, 0, 0, Math.PI * 2), 4)
     }
+    arm(50, -1)
+    arm(mirror(50), 1)
+
+    // ---------- body: a stout barrel, waistcoat or plain tunic ----------
+    const body = () => {
+      x.moveTo(64, 132)
+      x.quadraticCurveTo(96, 122, 128, 132)
+      x.quadraticCurveTo(148, 182, 142, 232)
+      x.quadraticCurveTo(96, 244, 50, 232)
+      x.quadraticCurveTo(44, 182, 64, 132)
+    }
+    draw(BODY, body)
+
+    if (outfit.waistcoat) {
+      x.save()
+      x.beginPath(); body(); x.closePath(); x.clip()
+      // the back seam
+      x.strokeStyle = outfit.waistcoatDark; x.lineWidth = 3
+      x.beginPath(); x.moveTo(96, 128); x.lineTo(96, 240); x.stroke()
+      // the half-belt across the small of the back, with its buckle
+      x.fillStyle = outfit.waistcoatDark
+      x.fillRect(70, 198, 52, 9)
+      x.fillStyle = '#c9a65a'
+      x.fillRect(92, 197, 8, 11)
+      x.restore()
+      // redraw the outline the clip-painting sat inside
+      x.beginPath(); body(); x.closePath()
+      x.lineWidth = 5; x.strokeStyle = INK; x.stroke()
+    }
+
+    // ---------- shirt collar, showing above the body ----------
+    draw(SHIRT, () => {
+      x.moveTo(78, 126); x.quadraticCurveTo(96, 118, 114, 126)
+      x.lineTo(112, 136); x.quadraticCurveTo(96, 131, 80, 136)
+    }, 4)
 
     // ---------- neck ----------
     draw(SKIN_S, () => {
-      x.moveTo(85, 112); x.lineTo(111, 112); x.lineTo(113, 142); x.lineTo(83, 142)
+      x.moveTo(84, 106); x.lineTo(108, 106); x.lineTo(110, 128); x.lineTo(82, 128)
     }, 0)
 
     // ---------- head, in three-quarter rear ----------
     // Everything past the hair is cheek and jaw. No features are ever drawn.
-    draw(SKIN, () => x.ellipse(101, 80, 43, 47, 0, 0, Math.PI * 2))
-    draw(SKIN, () => x.ellipse(140, 86, 8, 11, 0.25, 0, Math.PI * 2), 4)
+    draw(SKIN, () => x.ellipse(97, 80, 44, 45, 0, 0, Math.PI * 2))
+    // the ear, with a slight point, tipped up and back
+    draw(SKIN, () => {
+      x.moveTo(134, 74)
+      x.quadraticCurveTo(144, 62, 149, 62)
+      x.quadraticCurveTo(151, 80, 144, 98)
+      x.quadraticCurveTo(136, 100, 134, 92)
+    }, 4)
 
-    const hairline = () => {
-      x.moveTo(58, 92)
-      x.quadraticCurveTo(50, 30, 101, 30)
-      x.quadraticCurveTo(145, 31, 140, 78)
-      x.quadraticCurveTo(133, 68, 126, 82)
-      x.quadraticCurveTo(119, 96, 108, 90)
-      x.quadraticCurveTo(96, 104, 84, 95)
-      x.quadraticCurveTo(70, 106, 58, 92)
-    }
-    draw(HAIR, hairline)
-    // darker curls, clipped inside the mass so they never float free
+    // ---------- hair: a curly mop, built from curls ----------
+    // Covers the back and crown, stops short of the right cheek and the ear so
+    // the head still reads as turned a little.
+    const curls = [
+      [64, 54, 17], [83, 41, 18], [103, 36, 18], [122, 43, 16], [133, 56, 11],
+      [54, 74, 16], [75, 66, 18], [98, 60, 19], [119, 63, 16],
+      [70, 86, 17], [90, 82, 21], [112, 80, 17],
+      [54, 95, 13], [70, 102, 13], [87, 106, 13], [103, 104, 12], [117, 96, 11], [128, 84, 10],
+    ]
+    blobs(HAIR, curls)
+    // darker C-strokes inside, so the mass reads as curls rather than a helmet
     x.save()
-    x.beginPath(); hairline(); x.closePath(); x.clip()
-    x.fillStyle = HAIR_S
-    for (const [cx, cy, r] of [[70, 78, 15], [96, 66, 17], [122, 74, 14], [84, 44, 13], [112, 42, 12]]) {
-      x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill()
+    x.beginPath()
+    for (const [cx, cy, r] of curls) { x.moveTo(cx + r, cy); x.arc(cx, cy, r, 0, Math.PI * 2) }
+    x.clip()
+    x.strokeStyle = HAIR_S; x.lineWidth = 4
+    for (const [cx, cy, r] of curls) {
+      x.beginPath(); x.arc(cx + 2, cy + 2, r * 0.55, 0.7 * Math.PI, 1.9 * Math.PI); x.stroke()
     }
     x.restore()
   }
 
-  const row = document.getElementById('row')
-  for (const tone of TONES) {
-    const fig = document.createElement('figure')
-    const canvas = document.createElement('canvas')
-    canvas.width = W; canvas.height = H
-    if (tone.id === CURRENT) canvas.className = 'current'
-    drawPlayer(canvas.getContext('2d'), tone)
-    const cap = document.createElement('figcaption')
-    const link = document.createElement('a')
-    link.textContent = tone.id + (tone.id === CURRENT ? ' (current)' : '')
-    link.download = 'player.png'
-    link.href = canvas.toDataURL('image/png')
-    cap.append(link, document.createElement('br'), document.createTextNode(tone.skin))
-    fig.append(canvas, cap)
-    row.append(fig)
+  const rows = document.getElementById('rows')
+  for (const outfit of OUTFITS) {
+    const heading = document.createElement('h2')
+    heading.textContent = outfit.id + (outfit.id === CURRENT.outfit ? ' (current)' : '')
+    const row = document.createElement('div')
+    row.className = 'row'
+    rows.append(heading, row)
+
+    for (const tone of TONES) {
+      const current = tone.id === CURRENT.tone && outfit.id === CURRENT.outfit
+      const fig = document.createElement('figure')
+      if (current) fig.className = 'current'
+
+      const canvas = document.createElement('canvas')
+      canvas.width = W; canvas.height = H
+      canvas.className = 'large'
+      canvas.dataset.outfit = outfit.id
+      canvas.dataset.tone = tone.id
+      drawPlayer(canvas.getContext('2d'), tone, outfit)
+
+      // The same sprite at the size it is actually seen. This is the one to judge.
+      const small = document.createElement('canvas')
+      const smallW = Math.round((IN_GAME_HEIGHT * W) / H)
+      small.width = smallW * devicePixelRatio
+      small.height = IN_GAME_HEIGHT * devicePixelRatio
+      small.style.width = `${smallW}px`
+      small.style.height = `${IN_GAME_HEIGHT}px`
+      const sctx = small.getContext('2d')
+      sctx.imageSmoothingQuality = 'high'
+      sctx.drawImage(canvas, 0, 0, small.width, small.height)
+
+      const pair = document.createElement('div')
+      pair.className = 'pair'
+      pair.append(canvas, small)
+
+      const cap = document.createElement('figcaption')
+      const link = document.createElement('a')
+      link.textContent = tone.id + (current ? ' (current)' : '')
+      link.download = 'player.png'
+      link.href = canvas.toDataURL('image/png')
+      cap.append(link, document.createElement('br'), document.createTextNode(tone.skin))
+      fig.append(pair, cap)
+      row.append(fig)
+    }
   }
 </script>

@@ -64,9 +64,13 @@ this list rather than optimizing for something else.
 
 ## Characters — important
 
-**The player** is a small barefoot child in a plain tunic and rolled trousers,
-seen from behind or in a simple front view. No backpack, no items, no weapons,
-no visible face. A backpack implies a journey and inventory; there is neither.
+**The player** is a small barefoot halfling, child-sized: a curly mop of hair,
+big bare splayed feet with hair on top, a stout build, a shirt with rolled
+sleeves under a brick waistcoat, and breeches rolled below the knee. Seen from
+behind or in a simple front view. No backpack, no items, no weapons, no visible
+face. A backpack implies a journey and inventory; there is neither. The look is
+drawn by `tools/player-sprite.html`, which also keeps the plain-tunic outfit
+he started in. Halfling in *look* only: the copy still never names what he is.
 
 **Tom Bombadil is never rendered.** A bearded figure in a blue coat and feathered
 hat appeared in an early placeholder — that was wrong. Tom exists only as an
