@@ -7,7 +7,7 @@ import {
   Mesh,
   MeshLambertMaterial,
 } from 'three'
-import { FOREST, PROPS, SEED } from '../config.js'
+import { CAMERA, FOREST, PROPS, SEED } from '../config.js'
 import { surface } from '../palette.js'
 import { noise2D, terrainHeight } from '../util/terrain.js'
 import { makeRng, pick, randRange } from '../util/rng.js'
@@ -256,9 +256,27 @@ function scatterPositions(rng) {
   // Generous, because most proposals inside a clearing are rejected outright.
   const maxAttempts = 60000
 
-  // The guaranteed clearing is centred on the spawn, not the world origin —
-  // otherwise moving the spawn moves the player out of their own clearing.
+  // Two guaranteed clearings. The glade round the boombox is tested *before*
+  // the density draw, exactly as it always was, so the stream of random draws —
+  // and with it every tree in the forest — is unchanged (see
+  // PROPS.gladeCentre). The spawn's, and the sightline from it to the camera,
+  // are tested *after* the draws, so they only remove trees that would have
+  // stood there. A few replacements do appear elsewhere, to keep the count.
+  const [gladeX, , gladeZ] = PROPS.gladeCentre
   const [spawnX, , spawnZ] = PROPS.playerPosition
+  const clearSq = FOREST.clearingRadius ** 2
+  // The camera's bearing on the ground: the direction from the player towards
+  // the lens. The sightline corridor runs that way from the spawn.
+  const yaw = (CAMERA.yawDeg * Math.PI) / 180
+  const lensX = Math.sin(yaw)
+  const lensZ = Math.cos(yaw)
+  const inSightline = (x, z) => {
+    const dx = x - spawnX
+    const dz = z - spawnZ
+    const along = dx * lensX + dz * lensZ
+    const across = Math.abs(dx * lensZ - dz * lensX)
+    return along > 0 && along < FOREST.sightline.length && across < FOREST.sightline.halfWidth
+  }
 
   for (let attempt = 0; attempt < maxAttempts && positions.length < FOREST.count; attempt++) {
     const angle = rng() * Math.PI * 2
@@ -268,8 +286,10 @@ function scatterPositions(rng) {
     const x = Math.cos(angle) * radius
     const z = Math.sin(angle) * radius
 
-    if ((x - spawnX) ** 2 + (z - spawnZ) ** 2 < FOREST.clearingRadius ** 2) continue
+    if ((x - gladeX) ** 2 + (z - gladeZ) ** 2 < clearSq) continue
     if (rng() >= standDensity(x, z)) continue
+    if ((x - spawnX) ** 2 + (z - spawnZ) ** 2 < clearSq) continue
+    if (inSightline(x, z)) continue
 
     let tooClose = false
     for (const p of positions) {

@@ -76,10 +76,13 @@ export const CAMERA = {
   near: -30,
   far: 200,
   /**
-   * Offset from the clearing, which pushes the player and boombox down and
-   * left of centre so the title overlay doesn't sit on them.
+   * What the title shot looks at. Offset from the spawn so the player sits down
+   * and left of centre, where the title overlay doesn't cover him; the camera
+   * rig derives that composition from `target − PROPS.playerPosition`, so
+   * **if the spawn moves, move this by the same amount** or the framing goes
+   * with it. The offset is (−4.829, −14.12).
    */
-  target: [-6.8, 0.6, -11.32],
+  target: [3.221, 0.6, 14.13],
 }
 
 /**
@@ -103,8 +106,20 @@ export const FOREST = {
   scatterRadius: 75,
   /** No tree centre may be closer than this to another. */
   minSpacing: 6.5,
-  /** Keep the clearing around the player and boombox open. */
+  /**
+   * Radius kept free of trees around the boombox's glade and around the spawn.
+   * See PROPS.gladeCentre for why the glade isn't centred on the boombox.
+   */
   clearingRadius: 9,
+  /**
+   * A corridor kept free of trees from the spawn towards the camera, so the
+   * title shot and the first steps can see him. At a 35° pitch a canopy covers
+   * 1.43× its height of ground towards the lens, so trees well beyond the spawn
+   * — even past the walkable edge, where they stand to fill the view — can
+   * stand between him and the camera. Measured from the spawn along the
+   * camera's ground bearing; `halfWidth` is either side of that line.
+   */
+  sightline: { length: 35, halfWidth: 8 },
   /** World units per feature of the density field. Bigger = broader stands. */
   clusterScale: 30,
   /** Field values below this are bare clearing. Raise for more open ground. */
@@ -289,11 +304,25 @@ export const OCCLUSION = {
 
 export const PROPS = {
   /**
-   * Placed 3.2 m from the boombox along the camera's screen-horizontal axis —
-   * a few paces, close enough to read as regarding it — and offset sideways
-   * rather than in depth so the two don't stack on top of each other.
+   * The spawn: 28 m from the boombox at a compass bearing of 195°, a little
+   * west of due south, in a natural clearing (nearest trunk 10.5 m, and the
+   * stand-density field is zero for 3 m round). You start hearing the guitar
+   * nearly alone, with a thread of bass coming in from the west, and the
+   * boombox — where every stem comes together — is out of frame up the screen,
+   * the way he is already facing. Walking assembles the piece.
+   *
+   * Moving this moves the title framing too: shift CAMERA.target by the same.
    */
-  playerPosition: [-1.971, 0, 2.8],
+  playerPosition: [8.05, 0, 28.25],
+  /**
+   * The centre of the clearing the boombox stands in. It is *not* the boombox
+   * position: it is where the spawn used to be, 3.2 m away, and it has to stay
+   * exactly this number. The tree scatter skips a random draw for every
+   * proposal inside this clearing, so moving it by a centimetre shifts every
+   * later draw and every tree in the forest moves. Leave it alone unless you
+   * want a different forest.
+   */
+  gladeCentre: [-1.971, 0, 2.8],
   /**
    * The halfling's height, and the anchor for every other scale in the scene.
    * A hobbit stands about the height of a human child, so 1.15 m.
@@ -310,17 +339,22 @@ export const PROPS = {
 }
 
 /**
- * The audio engine. Phase 2 has exactly one source, and it is the boombox —
- * the one sound in the forest that is allowed to come from something you can
- * see. Phase 3 moves sources out into zones.json; until then this is the list.
+ * The audio engine: four stems and a compass.
  *
- * Distances are metres on the ground, measured from the player. The camera at
- * walkViewSize shows roughly 16 m either side of him, so `outerRadius` sits
- * well past the edge of the frame: you should hear the boombox before you can
- * see it, and keep hearing it after it has gone.
+ * The boombox is the centre of the mix. Stand by it and you hear all four stems
+ * at once — the whole piece. Walk away from it and the mix narrows towards
+ * whichever stem lies in the direction you went: due north, by the edge, is
+ * percussion alone; north-west is percussion and bass; due west is bass alone;
+ * and so on round. The directions are *screen* directions, because that is what
+ * the player experiences — north is up the screen, the way the up key walks.
+ *
+ * The boombox is still the forest's one visible source; it's just that what it
+ * plays is everything, and what you hear depends on which way you leave it.
+ *
+ * Distances are metres on the ground, measured from the centre.
  */
 export const AUDIO = {
-  /** Everything passes through this. 1 is the level the file was bounced at. */
+  /** Everything passes through this. 1 is the level the files were bounced at. */
   masterGain: 0.9,
   /**
    * How long the forest takes to come up after you step in, in seconds.
@@ -333,23 +367,33 @@ export const AUDIO = {
    */
   smoothing: 0.12,
   /**
-   * How far left or right of him, across the screen, a source has to be to
-   * reach `maxPan`. Measured along the camera's horizontal, not the world's,
-   * because left on screen should be left in the ears.
+   * Each stem is panned towards its own direction, so from the centre the
+   * flute sits to the right and the bass to the left — a hint of which way to
+   * walk for each. This is how far across the screen a stem's direction has to
+   * lie to reach `maxPan`.
    */
   panWidth: 12,
   /** Never hard-pan. A source fully in one ear sounds like a broken headphone. */
   maxPan: 0.6,
-  sources: [
-    {
-      id: 'boombox',
-      file: '/audio/tom-bombachill-all-tracks.wav',
-      position: PROPS.boomboxPosition,
-      gain: 1,
-      /** Full volume inside this — roughly arm's reach of the stump. */
-      innerRadius: 2.5,
-      /** Silent beyond this. */
-      outerRadius: 28,
-    },
+  compass: {
+    centre: PROPS.boomboxPosition,
+    /** Inside this, every stem plays in full: the whole piece. */
+    innerRadius: 4,
+    /**
+     * By this distance the mix has narrowed all the way to the direction's own
+     * stem (or its two neighbours, on a diagonal). The world's edge is at 40.
+     */
+    outerRadius: 32,
+  },
+  /**
+   * `bearingDeg` is the compass direction the stem owns: 0 north (up the
+   * screen), 90 east (right), 180 south, 270 west. Stems 90° apart blend
+   * evenly on the diagonals between them.
+   */
+  stems: [
+    { id: 'percussion', file: '/audio/tom-bombachill-percussion.flac', bearingDeg: 0, gain: 1 },
+    { id: 'tin-flute', file: '/audio/tom-bombachill-tin-flute.flac', bearingDeg: 90, gain: 1 },
+    { id: 'guitar', file: '/audio/tom-bombachill-guitar-1.flac', bearingDeg: 180, gain: 1 },
+    { id: 'bass', file: '/audio/tom-bombachill-bass.flac', bearingDeg: 270, gain: 1 },
   ],
 }

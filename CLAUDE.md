@@ -184,8 +184,13 @@ sends rather than sources.
 - **Phase 2 — One sound.** Done. Audio engine, one source (a full-mix
   placeholder on the boombox, not a real stem), squared distance falloff,
   screen-relative pan, fade-in on entering.
-- **Phase 3 — The mixing board.** Next. All stems, `zones.json`, the four-source sweet
-  spot that is unmarked and findable only by accident.
+- **Phase 3 — The mixing board.** In progress. Four stems (percussion, bass,
+  guitar, tin flute) on a compass round the boombox: all four together at the
+  boombox, narrowing to one stem as you walk away north, west, south or east,
+  neighbours blended on the diagonals (`compassMix`, `AUDIO` in `config.js`).
+  The boombox is the sweet spot — a deliberate change from the original
+  "unmarked, findable only by accident" — and the spawn is 28 m out, so it
+  still has to be found. Not yet: `zones.json`, the other source types.
 - **Phase 4** — zone character. **Phase 5** — feel + the `sit` state machine
   (must emit events; later phases depend on it). **Phase 6** — contributor
   credits. **Phase 7** — admin (probably never; resist it). **Phase 8** — the

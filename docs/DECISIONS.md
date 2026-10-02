@@ -653,17 +653,70 @@ with the cycle region on exact bar lines, Include Audio Tail off, Normalize off,
 and the 2nd cycle pass (or a hand-made second copy) so reverb tails wrap. The
 first file is exactly 48.000 s at 48 kHz, which is how you can tell it worked.
 
-Cloudflare's static assets cap each file at 25 MiB. A minute of 24-bit stereo
-WAV is ~17 MB, so long stems will need FLAC (lossless, loops cleanly, plays in
-every current browser) or mono.
+The stems ship as **FLAC**, converted from Logic's WAV bounces with
+`ffmpeg -i stem.wav -c:a flac -compression_level 8 stem.flac`. Lossless, so it
+loops exactly as the WAV does: each decoded stem was checked bit-identical to
+its WAV and still 2,304,000 frames. The four went from 55 MB to 16 MB. The WAVs
+live outside the repo in `../stems-wav/`; the public repo keeps history
+forever, so they were never committed. Cloudflare caps each file at 25 MiB.
 
-### Falloff is squared, and the outer radius is past the frame
+### The mix is a compass round the boombox (replaced distance falloff)
 
-Linear falloff makes most of the approach loud and the last few metres flat.
-`(1 − t)²` keeps the far field quiet and makes the final steps towards a source
-still pay off. The camera at `walkViewSize` shows ~16 m either side of the
-player, and `outerRadius` is 28: you hear the boombox before you see it, which
-is the whole design.
+Phase 2 faded one full-mix file by distance from the boombox. With four stems
+the author's design is a compass instead: all four together at the boombox,
+narrowing towards the stem that owns the direction you walk away in —
+percussion north, tin flute east, guitar south, bass west, neighbours blended
+on the diagonals. `compassMix` in `audio/engine.js` is the whole of it:
+
+    gain = (1 − t) + t · max(0, cos(angle between you and the stem))
+
+where `t` eases from 0 at `compass.innerRadius` to 1 at `outerRadius`. Cos is
+chosen because two stems 90° apart get cos and sin of the same angle on a
+diagonal, so the summed power stays exactly 1 all the way round the edge —
+no dip between stems. It is pure and exported; the table of gains at the
+centre, each compass point and each diagonal was checked in Node before it
+was ever heard.
+
+"North" is *up the screen*, not world −Z: the world is rotated 30° under the
+camera, and the player only knows the screen. Each stem is also panned
+towards the far end of its own bearing, so from the middle the flute leans
+right and the bass left — a hint of which way to walk for each.
+
+### The spawn is 28 m out, so you have to find the boombox
+
+You start south-south-west of the boombox (bearing 195°), hearing the guitar
+nearly alone with a thread of bass, and walk to the boombox to assemble the
+piece. Three things had to move with it, and each is a trap:
+
+- **The boombox keeps its clearing at the *old* spawn point.**
+  `PROPS.gladeCentre` is (−1.971, 2.8), where the player used to stand, and must
+  stay that exact number. The tree scatter skips a random draw for every
+  proposal inside that clearing; move it a centimetre and every later draw
+  shifts and the whole forest is replaced. Verified: same 167 trees, same
+  fingerprint, after the spawn moved.
+- **The new spawn's clearing is tested *after* the draws**, so it can only
+  remove trees. Same for the sightline below.
+- **A spawn near the south edge is hidden under canopy.** The camera looks from
+  screen-south, and past the walkable edge stands a band of trees whose only
+  job is to fill that near field. From a south spawn they are between him and
+  the lens; the first attempt at this spawn showed nothing but leaves. The fix
+  is `FOREST.sightline`: a corridor 35 m long and ±8 m wide from the spawn
+  towards the camera, kept free of trees. It moved 6 of 167 trees. Wider or
+  longer corridors left the stands too full to place every tree, and the
+  replacements grew in beside the corridor and blocked it again.
+- **The title framing follows the spawn.** The camera derives its composition
+  from `CAMERA.target − PROPS.playerPosition`, so the target moved by the same
+  amount. Moving the spawn again means moving both.
+
+How the spot was chosen: a search in Node over bearings and radii with the real
+forest generator, keeping points where `standDensity` is zero for 3 m round,
+the nearest trunk is 5 m+ away, and no canopy sphere crosses the ray from his
+chest to the camera. Note the occluder spheres use the field name `centre`;
+a script reading `center` silently finds nothing blocking anywhere.
+
+The stems sum back to the full mix to −57 dB, so the centre really is the
+piece as bounced. Note the edges are quieter than the middle by nature —
+one instrument against four; percussion alone is ~10 dB under the mix.
 
 ---
 

@@ -158,11 +158,12 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   sound.add(AUDIO, 'masterGain', 0, 1.5, 0.01).name('master')
   sound.add(AUDIO, 'panWidth', 2, 40, 0.5).name('pan width (m)')
   sound.add(AUDIO, 'maxPan', 0, 1, 0.01).name('max pan')
-  for (const source of AUDIO.sources) {
-    const folder = sound.addFolder(source.id)
-    folder.add(source, 'gain', 0, 1.5, 0.01)
-    folder.add(source, 'innerRadius', 0, 20, 0.1).name('full volume within (m)')
-    folder.add(source, 'outerRadius', 1, 80, 0.5).name('silent beyond (m)')
+  sound.add(AUDIO.compass, 'innerRadius', 0, 20, 0.5).name('everything within (m)')
+  sound.add(AUDIO.compass, 'outerRadius', 2, 40, 0.5).name('one stem by (m)')
+  for (const stem of AUDIO.stems) {
+    const folder = sound.addFolder(stem.id)
+    folder.add(stem, 'gain', 0, 1.5, 0.01)
+    folder.add(stem, 'bearingDeg', 0, 360, 1).name('bearing (°)')
   }
 
   const grass = gui.addFolder('Grass texture — rebuilds')
