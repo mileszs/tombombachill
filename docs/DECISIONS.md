@@ -625,6 +625,35 @@ not take, from a directory without `.tool-versions`.
 
 ---
 
+## The boombox spotlight
+
+A real `SpotLight` straight down from 11 m, plus a faint visible beam. The
+light has `decay = 0`, so `intensity` is simply the pool's brightness rather
+than a candela figure that has to be squared against the height. It casts
+shadows into a 1024² map of its own, so the boombox throws a shadow inside
+its pool; like the key, it is a light, so `disposeWorld` has to dispose it by
+hand. The beam is an open cone with additive blending and a two-line shader:
+edges fade by the view-space normal's Z (under an orthographic camera that
+*is* how side-on the surface is), and the top fades out so there is no hard
+apex in the air. Its base is sized to the pool, `height · tan(angle)`.
+
+The motes are a `Points` object of 140 that never touches the CPU after it
+is built: each has a fixed random seed, and the vertex shader turns seed and
+clock into its whole life — rising, circling the axis, held inside the cone at
+whatever height it has reached, fading in at the bottom of its climb and out
+at the top so the wrap round is never seen. Two traps. The placeholder
+positions are all at the origin, so three's bounding sphere is a point and it
+culls them at the frame edge: `frustumCulled = false`. And points are sized in
+pixels, so the size in metres is converted in `onBeforeRender` from the
+drawing buffer height and `projectionMatrix[5]` (2 / frustum height for an
+orthographic camera), which keeps them the right size through the push-in.
+
+Cost, measured uncapped: ~18 more draw calls; no change at 1× or 2× on a
+1280-wide window, 79 → 68 fps at 3840×2400. That is the extra light evaluated
+per pixel, which is the kind of cost a phone feels first.
+
+---
+
 ## Phase 2 — one sound
 
 ### Plain Web Audio, not Tone.js

@@ -128,6 +128,19 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedColor(ground, surface.ground, 'rootShade').name('trunk contact')
   bakedNum(ground, surface.ground, 'rootShadeStrength', 0, 1, 0.01).name('contact amount')
 
+  // ---- Boombox spotlight: live, read every frame by scene/spotlight.js --
+  const spot = gui.addFolder('Boombox spotlight')
+  spot.addColor(light.spot, 'color')
+  spot.add(light.spot, 'intensity', 0, 8, 0.05)
+  spot.add(light.spot, 'height', 3, 25, 0.5).name('height (m)')
+  spot.add(light.spot, 'angleDeg', 3, 40, 0.5).name('cone half-angle (°)')
+  spot.add(light.spot, 'penumbra', 0, 1, 0.01).name('soft edge')
+  spot.add(light.spot, 'beamOpacity', 0, 0.5, 0.005).name('beam')
+  spot.add(light.spot.motes, 'opacity', 0, 2, 0.01).name('motes')
+  spot.add(light.spot.motes, 'size', 0.02, 0.4, 0.005).name('mote size (m)')
+  spot.add(light.spot.motes, 'rise', 0, 1.5, 0.01).name('mote rise (m/s)')
+  spot.add(light.spot.motes, 'swirl', 0, 1, 0.01).name('mote swirl')
+
   // ---- Player lighting: live, read every frame by scene/player.js -----
   const player = gui.addFolder('Player light')
   player.add(light.player, 'roundnessDeg', 0, 90, 1).name('roundness (°)')
@@ -203,7 +216,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [player, occ, wind, grass, trees, clutter, props]) folder.close()
+  for (const folder of [spot, player, occ, wind, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
     if (!TOGGLE_KEYS.has(event.key)) return

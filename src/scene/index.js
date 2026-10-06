@@ -9,6 +9,7 @@ import { createCollider } from './collision.js'
 import { createOcclusionFade } from './occlusion.js'
 import { createPlayer } from './player.js'
 import { createBoombox } from './boombox.js'
+import { createSpotlight } from './spotlight.js'
 import { advanceWind } from './wind.js'
 
 /**
@@ -47,6 +48,14 @@ export function createWorld(renderer) {
   const boombox = createBoombox()
   scene.add(boombox.object)
 
+  // The forest is magic; nobody says why there is a light on it.
+  const spotlight = createSpotlight([
+    boombox.object.position.x,
+    boombox.object.position.y,
+    boombox.object.position.z,
+  ])
+  scene.add(spotlight.light, spotlight.target, spotlight.beam, spotlight.motes)
+
   // Everything solid, in one list. All of it is a circle on the ground, which
   // is why the collider only ever needed to understand circles.
   const collider = createCollider([
@@ -61,6 +70,7 @@ export function createWorld(renderer) {
   return {
     scene,
     lighting,
+    spotlight,
     player,
     boombox: boombox.object,
     /** Resolves once every asynchronously-loaded asset is in place. */
@@ -73,6 +83,7 @@ export function createWorld(renderer) {
      */
     update(dt, rig, input) {
       advanceWind(dt)
+      spotlight.update(dt)
       player.update(dt, input, collider)
       rig.follow(player.position.x, player.position.z, dt)
       // The shadow box is only ±extent wide, so it has to travel too.
@@ -126,4 +137,6 @@ export function disposeWorld(world) {
   // DirectionalLight.dispose() releases its own shadow map, so this is the
   // whole of it.
   world.lighting?.key.dispose()
+  // The same, for the boombox's spotlight and its own (smaller) shadow map.
+  world.spotlight?.dispose()
 }

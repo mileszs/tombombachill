@@ -86,6 +86,41 @@ export const light = {
     lift: 0x443e38,
   },
 
+  /**
+   * The spotlight on the boombox. Nobody explains it; the forest is magic.
+   * Pale and a little cool on purpose: against warm golden-hour sun, a light
+   * that is plainly *not* sunlight is what makes it read as something else.
+   * Read live every frame by scene/spotlight.js.
+   */
+  spot: {
+    color: 0xe4ecff,
+    /** No distance falloff (decay 0), so this is simply how bright the pool is. */
+    intensity: 2.2,
+    /** Metres above the boombox. */
+    height: 11,
+    /** Half-angle of the cone, in degrees. Sets how wide the pool is. */
+    angleDeg: 13,
+    /** 0 is a hard edge on the pool, 1 fades all the way from the centre. */
+    penumbra: 0.65,
+    /** The faint visible beam. 0 turns it off and leaves only the pool. */
+    beamOpacity: 0.11,
+    /**
+     * Motes drifting up through the beam. All live except `count`, which is
+     * baked into the geometry when the world is built.
+     */
+    motes: {
+      count: 140,
+      /** Brightness of each mote at its peak. 0 hides them. */
+      opacity: 0.85,
+      /** Diameter in metres, so they shrink properly as the camera pushes in. */
+      size: 0.09,
+      /** How fast they rise, in metres per second. Err slow. */
+      rise: 0.18,
+      /** How fast they circle the light's axis, in radians per second. */
+      swirl: 0.12,
+    },
+  },
+
   shadow: {
     /**
      * Half-width of the shadow camera box, centred on what the view camera is
