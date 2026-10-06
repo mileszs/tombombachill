@@ -88,14 +88,22 @@ export const light = {
 
   /**
    * The spotlight on the boombox. Nobody explains it; the forest is magic.
-   * Pale and a little cool on purpose: against warm golden-hour sun, a light
-   * that is plainly *not* sunlight is what makes it read as something else.
+   * Deep purple on purpose: it is the complement of the amber key, so it is
+   * plainly *not* sunlight and stands apart from everything else in frame.
    * Read live every frame by scene/spotlight.js.
    */
   spot: {
-    color: 0xe4ecff,
-    /** No distance falloff (decay 0), so this is simply how bright the pool is. */
-    intensity: 2.2,
+    color: 0x9b5cff,
+    /**
+     * No distance falloff (decay 0), so this is simply how bright the pool is.
+     *
+     * High for a reason. Light multiplies surface colour, and purple light has
+     * little green in it while the forest floor is mostly green, so there is
+     * little for it to reflect: at the 2.2 the pale version used, this purple
+     * pool came out dim and grey. The beam and motes are additive glow, not
+     * reflection, so they show the colour at any intensity.
+     */
+    intensity: 4,
     /** Metres above the boombox. */
     height: 11,
     /** Half-angle of the cone, in degrees. Sets how wide the pool is. */

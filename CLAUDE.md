@@ -117,9 +117,10 @@ now 95, raking. The useful band is roughly 70–120°. The ground's brightness d
 not change with this at all, so it is a safe thing to push around.
 
 **The boombox has a spotlight, unexplained.** The world is magic; nothing
-says why. It is pale and slightly cool on purpose — the one light in the forest
-that is plainly *not* the sun — so it must not be "corrected" towards the
-golden-hour palette. It doubles as a beacon: you hear the full piece is
+says why. It is deep purple on purpose — the complement of the amber sun, the
+one light in the forest that is plainly *not* the sun — so it must not be
+"corrected" towards the golden-hour palette. Purple on a green floor reflects
+little, which is why its intensity is high. It doubles as a beacon: you hear the full piece is
 somewhere, then see the glow. `scene/spotlight.js`, `light.spot` in `palette.js`.
 
 **The forest moves.** A slow roll through the canopies and a faster shiver
