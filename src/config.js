@@ -215,6 +215,17 @@ export const PLAYER = {
 }
 
 /**
+ * The touch stick. Put a thumb down anywhere and drag; it is never drawn.
+ * Both are CSS pixels of drag from where the thumb first landed.
+ */
+export const TOUCH = {
+  /** Drag shorter than this and he stands still, so a resting thumb is not a walk. */
+  deadZone: 10,
+  /** Drag this far or further for full speed. In between, he ambles. */
+  fullSpeedAt: 70,
+}
+
+/**
  * Wind.
  *
  * Nothing in the forest moved, and with a fixed orthographic camera there is no

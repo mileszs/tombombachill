@@ -206,6 +206,25 @@ as world directions and two of the four cardinals go visibly wrong.
 `blur` clears the held set: a key held while the tab loses focus never sends a
 keyup, and the player would walk off on their own.
 
+### Mobile is an invisible floating touch stick, not tilt
+
+Put a thumb down anywhere on the canvas and drag. It walks from where the thumb
+landed towards where it is now, and nothing is drawn: there is no HUD. Tuned by
+`TOUCH` in `config.js` and its folder in the panel.
+
+Tilt was considered and rejected. Standing still is the main thing you do in
+this game, because you stop to listen, and tilt has no reliable neutral: a
+phone held in a hand drifts, so he would creep. `sit` will make that worse. iOS
+also gates `DeviceOrientationEvent` behind a permission dialog, which would put a
+system prompt on the front door, and tilt needs a calibration step.
+
+The stick is **analog**: up to unit length, so a short drag ambles. That's the
+one deliberate difference from the keys. The flip and front/back thresholds in
+`player.js` are relative to the wish's length, because a thumb never drags dead
+straight and an absolute 0.01 flickered him left and right on a near-vertical
+drag. `touch-action: none` on the canvas is load-bearing. Without it the
+browser takes the drag for scroll or pinch-zoom.
+
 ### The bob is driven by distance, not time
 
 `bobPhase` advances with metres actually covered, so it stays in step with the

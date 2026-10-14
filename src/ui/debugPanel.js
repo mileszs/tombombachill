@@ -2,7 +2,7 @@ import GUI from 'lil-gui'
 import { light, fog, surface } from '../palette.js'
 import { TONE_MAPPINGS, applyToneMapping } from '../core/renderer.js'
 import { applyLighting } from '../scene/lighting.js'
-import { AUDIO, CAMERA, OCCLUSION, WIND } from '../config.js'
+import { AUDIO, CAMERA, OCCLUSION, TOUCH, WIND } from '../config.js'
 import { applyWind } from '../scene/wind.js'
 
 /**
@@ -165,6 +165,11 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   wind.add(WIND, 'cardSpeed', 0, 4, 0.01).name('undergrowth speed').onChange(rewind)
   wind.add(WIND, 'waveNumber', 0, 0.6, 0.005).name('wave / metre').onChange(rewind)
 
+  // ---- Touch stick: live, read fresh on every input.read ------------
+  const touch = gui.addFolder('Touch stick')
+  touch.add(TOUCH, 'deadZone', 0, 60, 1).name('dead zone (px)')
+  touch.add(TOUCH, 'fullSpeedAt', 20, 240, 1).name('full speed at (px)')
+
   // ---- Audio: live, read fresh every frame by audio/engine.js --------
   // These want tuning by ear while walking, not by reading numbers.
   const sound = gui.addFolder('Audio')
@@ -216,7 +221,7 @@ export function createDebugPanel({ renderer, getWorld, rebuildWorld }) {
   bakedNum(props, surface.blobShadow, 'core', 0, 1, 0.01).name('blob centre')
   bakedNum(props, surface.blobShadow, 'mid', 0, 1, 0.01).name('blob midpoint')
 
-  for (const folder of [spot, player, occ, wind, grass, trees, clutter, props]) folder.close()
+  for (const folder of [spot, player, occ, wind, touch, grass, trees, clutter, props]) folder.close()
 
   const toggle = (event) => {
     if (!TOGGLE_KEYS.has(event.key)) return

@@ -15,7 +15,7 @@ const loader = createLoader()
 const renderer = createRenderer(container)
 const rig = createCameraRig(container.clientWidth / Math.max(container.clientHeight, 1))
 const { camera } = rig
-const input = createInput()
+const input = createInput(window, container)
 // Before the world build, so the stems decode while the forest is assembled.
 const audio = createAudioEngine()
 

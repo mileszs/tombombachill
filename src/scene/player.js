@@ -272,7 +272,8 @@ export function createPlayer({ anisotropy = 1 } = {}) {
 
       if (walking) {
         const step = PLAYER.speed * dt
-        // wish is already unit length, so diagonals are not faster.
+        // wish is at most unit length, so diagonals are not faster; a short
+        // touch drag gives less, and he ambles.
         const dx = (screenRight.x * wish.x + screenUp.x * wish.y) * step
         const dz = (screenRight.z * wish.x + screenUp.z * wish.y) * step
 
@@ -290,9 +291,14 @@ export function createPlayer({ anisotropy = 1 } = {}) {
 
         // Flip on screen-space horizontal travel, not world X — otherwise the
         // sprite faces the wrong way for two of the four cardinals.
-        if (Math.abs(wish.x) > 0.01) facing = wish.x > 0 ? 1 : -1
-        if (wish.y > 0.01) view = 'back'
-        else if (wish.y < -0.01) view = 'front'
+        // Thresholds are relative to the wish's own length: a thumb never
+        // drags dead straight, and an absolute threshold let a near-vertical
+        // drag flicker him left and right. Keys are unaffected — their
+        // components are 0 or at least 0.707 of the length.
+        const turn = Math.hypot(wish.x, wish.y) * 0.25
+        if (Math.abs(wish.x) > turn) facing = wish.x > 0 ? 1 : -1
+        if (wish.y > turn) view = 'back'
+        else if (wish.y < -turn) view = 'front'
         showView(view)
       }
 
